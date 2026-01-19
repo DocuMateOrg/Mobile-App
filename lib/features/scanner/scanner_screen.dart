@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'result_screen.dart';
 
 // We need a global variable to store the list of cameras
 List<CameraDescription> cameras = [];
@@ -62,13 +63,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
     try {
       // 1. Capture the image
       final XFile image = await _controller!.takePicture();
-      
-      // 2. Navigate to the "Review/Crop" screen (We will build this next)
-      // For now, let's just print the path so we know it worked
-      print("Picture taken at: ${image.path}");
-      
-      // TODO: Pass this image path to the next screen for OCR
-      
+      if (!mounted) return;
+
+      // Navigate to the Result Screen with the image path
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResultScreen(imagePath: image.path),
+        ),
+      );
     } catch (e) {
       print(e);
     }
