@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Added Firebase Auth
 import 'package:documate/screens/profile_page.dart';
+import 'package:go_router/go_router.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -106,9 +107,7 @@ class DashboardScreen extends StatelessWidget {
         onPressed: () {
             // If you aren't using GoRouter yet, use:
             // Navigator.push(context, MaterialPageRoute(builder: (context) => const ScanPage()));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Camera opening..."))
-            );
+            context.push('/scan');
         },
         backgroundColor: const Color(0xFF0056D2),
         shape: const CircleBorder(),
