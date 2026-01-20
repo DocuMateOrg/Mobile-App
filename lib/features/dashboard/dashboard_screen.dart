@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added Firebase Auth
+import 'package:documate/screens/profile_page.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
+  // Function to handle logout
+  void _handleLogout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    // No need to navigate manually; RootAuthWrapper handles it!
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser; // Get logged in user info
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.black),
-          onPressed: () {}, // Open Side Menu later
+          icon: const Icon(Icons.logout, color: Colors.black), // Changed to logout for now
+          onPressed: () => _handleLogout(context), 
         ),
         title: Text(
           "Home",
@@ -36,12 +45,22 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. The Quick Action Buttons Row
+            // Display User Email
+            Text(
+              "Hi, ${user?.email?.split('@')[0] ?? 'User'} 👋",
+              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              "Manage your docs",
+              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 25),
+
             const QuickActionRow(),
             
             const SizedBox(height: 30),
             
-            // 2. "Newest first" Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -58,20 +77,19 @@ class DashboardScreen extends StatelessWidget {
             
             const SizedBox(height: 15),
 
-            // 3. Document List (Hardcoded data for UI check)
             const DocumentCard(
               title: "Music Festival",
               time: "Just now",
               pages: "1 page",
               size: "12 MB",
-              iconColor: Colors.black, // Dark icon bg
+              iconColor: Colors.black,
             ),
             const DocumentCard(
               title: "Carnival Fun Fair",
               time: "2 hours ago",
               pages: "1 page",
               size: "12 MB",
-              iconColor: Colors.red, // Red icon bg
+              iconColor: Colors.red,
             ),
              const DocumentCard(
               title: "Music Party",
@@ -83,14 +101,14 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-      // 4. The Bottom Navigation Bar (Floating Style)
       bottomNavigationBar: const CustomBottomNav(),
-      // 5. The Floating Scan Button
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-            // This will open the camera later
-            
-            context.push('/scan');
+            // If you aren't using GoRouter yet, use:
+            // Navigator.push(context, MaterialPageRoute(builder: (context) => const ScanPage()));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Camera opening..."))
+            );
         },
         backgroundColor: const Color(0xFF0056D2),
         shape: const CircleBorder(),
@@ -101,7 +119,7 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-// --- WIDGETS ---
+// --- WIDGETS (Kept the same but added navigation placeholders) ---
 
 class QuickActionRow extends StatelessWidget {
   const QuickActionRow({super.key});
@@ -120,21 +138,24 @@ class QuickActionRow extends StatelessWidget {
   }
 
   Widget _buildActionButton(IconData icon, String label, Color color) {
-    return Column(
-      children: [
-        Container(
-          height: 60,
-          width: 60,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1), // Light pastel background
-            shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.3)),
+    return InkWell( // Added tap effect
+      onTap: () {},
+      child: Column(
+        children: [
+          Container(
+            height: 60,
+            width: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Icon(icon, color: color, size: 28),
           ),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: GoogleFonts.poppins(fontSize: 12)),
-      ],
+          const SizedBox(height: 8),
+          Text(label, style: GoogleFonts.poppins(fontSize: 12)),
+        ],
+      ),
     );
   }
 }
@@ -237,12 +258,18 @@ class CustomBottomNav extends StatelessWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.grid_view, color: Color(0xFF0056D2)),
-              onPressed: () {},
+              onPressed: () {}, // Already on Home
             ),
             IconButton(
               icon: const Icon(Icons.person_outline, color: Colors.grey),
-              onPressed: () {},
+              onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfilePage()),
+    );
+  },
             ),
+            
           ],
         ),
       ),

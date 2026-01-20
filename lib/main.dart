@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:documate/core/theme/router.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
+import 'package:documate/screens/login_page.dart'; 
+import 'package:documate/features/dashboard/dashboard_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -12,48 +20,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      routerConfig: router,
-
-      title: 'Doc Digitizer',
+    return MaterialApp(
+      title: 'Documate',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // Extracting the colors from your screenshots
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0056D2), // The deep blue from your Login btn
+          seedColor: const Color(0xFF0056D2),
           primary: const Color(0xFF0056D2),
-          secondary: const Color(0xFFEDF2F7), // Light grey background
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFFFFFF),
-        // Setting a global font that looks like the design
-        textTheme: GoogleFonts.poppinsTextTheme(), 
-      ), // We will replace this with Router later
+        textTheme: GoogleFonts.poppinsTextTheme(),
+      ),
+      home: const RootAuthWrapper(),
     );
   }
 }
 
-// Temporary screen to test setup
-class PlaceholderScreen extends StatelessWidget {
-  const PlaceholderScreen({super.key});
+class RootAuthWrapper extends StatelessWidget {
+  const RootAuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Setup Complete")),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.document_scanner, size: 64, color: Color(0xFF0056D2)),
-            const SizedBox(height: 20),
-            Text(
-              "Ready to Start Building",
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          ],
-        ),
-      ),
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        
+        // If data is present, the user is logged in
+        if (snapshot.hasData && snapshot.data != null) {
+          return const DashboardScreen(); 
+        }
+        
+        // If data is null, the user is logged out - show Login Page
+        return const LoginPage();
+      },
     );
   }
 }
