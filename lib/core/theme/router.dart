@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Import your screens (adjust paths if needed)
+import '../../features/scanner/result_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/scanner/scanner_screen.dart';
 import '../../screens/login_page.dart';  
@@ -56,6 +57,14 @@ final router = GoRouter(
     GoRoute(
       path: '/profile',
       builder: (context, state) => const ProfilePage(),
+    ),
+    GoRoute(
+      path: '/result',
+      builder: (context, state) {
+        // Retrieve the imagePath passed from the camera
+        final imagePath = state.extra as String; 
+        return ResultScreen(imagePath: imagePath);
+      },
     ),
   ],
 );

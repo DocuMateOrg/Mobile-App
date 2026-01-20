@@ -1,7 +1,6 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class OCRService {
-  // Use the default script (Latin). You can change this for other languages.
   final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
   Future<String> processImage(String imagePath) async {
@@ -17,6 +16,6 @@ class OCRService {
   }
 
   void dispose() {
-    _textRecognizer.close(); // Always close to prevent memory leaks
+    _textRecognizer.close();
   }
 }

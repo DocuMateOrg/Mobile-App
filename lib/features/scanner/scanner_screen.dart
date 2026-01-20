@@ -4,7 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'result_screen.dart';
-
+import 'package:image_cropper/image_cropper.dart';
 // We need a global variable to store the list of cameras
 List<CameraDescription> cameras = [];
 
@@ -65,18 +65,39 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final XFile image = await _controller!.takePicture();
       if (!mounted) return;
 
+      final croppedFile = await _cropImage(image.path);
+
       // Navigate to the Result Screen with the image path
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ResultScreen(imagePath: image.path),
-        ),
-      );
+      if (croppedFile != null && mounted) {
+        // 3. Navigate to Result Screen with the EDITED image
+        context.push('/result', extra: croppedFile.path);
+      }
     } catch (e) {
-      print(e);
+      print("Error taking picture: $e");
     }
   }
-
+Future<CroppedFile?> _cropImage(String path) async {
+    return await ImageCropper().cropImage(
+      sourcePath: path,
+      // This configures the UI of the editor
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Edit Document',
+          toolbarColor: const Color(0xFF0056D2), // Your App Color
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.original,
+          lockAspectRatio: false,
+          // These controls allow Rotate (Deskew) and Crop
+          hideBottomControls: false, 
+        ),
+        IOSUiSettings(
+          title: 'Edit Document',
+          aspectRatioLockEnabled: false,
+          resetAspectRatioEnabled: false,
+        ),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
     if (!_isCameraInitialized) {
