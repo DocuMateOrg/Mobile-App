@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+
 import 'package:documate/screens/login_page.dart'; 
 import 'package:documate/features/dashboard/dashboard_screen.dart';
 
@@ -24,10 +25,7 @@ class MyApp extends StatelessWidget {
       title: 'Documate',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0056D2),
-          primary: const Color(0xFF0056D2),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0056D2)),
         useMaterial3: true,
         textTheme: GoogleFonts.poppinsTextTheme(),
       ),
@@ -42,18 +40,22 @@ class RootAuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: FirebaseAuth.instance.authStateChanges(), //
       builder: (context, snapshot) {
+        // While checking auth status, show a blue spinner on a white background
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF0056D2))),
+          );
         }
         
-        // If data is present, the user is logged in
+        // If a session exists, Firebase sends you to Dashboard
         if (snapshot.hasData && snapshot.data != null) {
           return const DashboardScreen(); 
         }
         
-        // If data is null, the user is logged out - show Login Page
+        // This is your ACTUAL login page design
         return const LoginPage();
       },
     );
