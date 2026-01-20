@@ -66,12 +66,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (!mounted) return;
 
       // Navigate to the Result Screen with the image path
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ResultScreen(imagePath: image.path),
-        ),
-      );
+      context.push('/result', extra: image.path);
     } catch (e) {
       print(e);
     }

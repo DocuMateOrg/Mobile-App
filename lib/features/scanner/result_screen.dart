@@ -71,7 +71,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     ),
                     const SizedBox(height: 10),
                     SelectableText(
-                      _extractedText, // Use SelectableText so users can copy it
+                      _extractedText, // SelectableText lets users copy the text
                       style: GoogleFonts.poppins(fontSize: 14),
                     ),
                   ],
@@ -80,21 +80,6 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
           ),
         ],
-      ),
-      // Action Button: This will later connect to Gemini
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: ElevatedButton.icon(
-          onPressed: () {
-            // TODO (Sprint 3): Send _extractedText to Gemini API
-          },
-          icon: const Icon(Icons.auto_awesome, color: Colors.white), // "Sparkles" icon for AI
-          label: const Text("Analyze with AI", style: TextStyle(color: Colors.white)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0056D2),
-            padding: const EdgeInsets.symmetric(vertical: 15),
-          ),
-        ),
       ),
     );
   }
