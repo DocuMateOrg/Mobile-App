@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:documate/main.dart'; //
+import 'package:go_router/go_router.dart'; // Import GoRouter
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
-      await FirebaseAuth.instance.signOut(); //
+      // 1. Sign out from Firebase
+      await FirebaseAuth.instance.signOut(); 
 
-      if (context.mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const RootAuthWrapper()), //
-          (route) => false, //
-        );
-      }
+      // 2. That's it! 
+      // The 'refreshListenable' in router.dart will see the user is gone
+      // and automatically redirect them to '/login'.
+      
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -27,7 +26,7 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser; //
+    final user = FirebaseAuth.instance.currentUser;
     const primaryColor = Color(0xFF0056D2);
 
     return Scaffold(
@@ -37,7 +36,7 @@ class ProfilePage extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(), // Use context.pop() for GoRouter back button
         ),
         title: Text(
           "Account",

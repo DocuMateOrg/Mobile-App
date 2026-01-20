@@ -13,17 +13,20 @@ class ResultScreen extends StatefulWidget {
 }
 
 class _ResultScreenState extends State<ResultScreen> {
-  String _extractedText = "Scanning...";
+  String _extractedText = "Processing...";
   final OCRService _ocrService = OCRService();
 
   @override
   void initState() {
     super.initState();
-    _processImage();
+    _startOCR();
   }
 
-  Future<void> _processImage() async {
+  Future<void> _startOCR() async {
+    // 1. Run the OCR
     final text = await _ocrService.processImage(widget.imagePath);
+    
+    // 2. Update UI
     if (!mounted) return;
     setState(() {
       _extractedText = text;
@@ -39,36 +42,36 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Digitized Text")),
+      appBar: AppBar(title: const Text("Scan Result")),
       body: Column(
         children: [
-          // 1. The Captured Image (Preview)
+          // Top: Image Preview
           SizedBox(
             height: 250,
             width: double.infinity,
             child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
           ),
           
-          // 2. The Text Result
+          // Bottom: Extracted Text
           Expanded(
             child: Container(
-              width: double.infinity,
               padding: const EdgeInsets.all(20),
-              color: Colors.grey[100],
+              color: Colors.grey[50],
+              width: double.infinity,
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Extracted Text:",
+                      "Extracted Text",
                       style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 16
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      _extractedText,
+                    SelectableText(
+                      _extractedText, // Use SelectableText so users can copy it
                       style: GoogleFonts.poppins(fontSize: 14),
                     ),
                   ],
@@ -76,22 +79,22 @@ class _ResultScreenState extends State<ResultScreen> {
               ),
             ),
           ),
-          
-          // 3. Action Buttons (Save / Gemini)
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: ElevatedButton(
-              onPressed: () {
-                // TODO: Save to database or Send to Gemini
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0056D2),
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text("Save Document", style: TextStyle(color: Colors.white)),
-            ),
-          )
         ],
+      ),
+      // Action Button: This will later connect to Gemini
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: ElevatedButton.icon(
+          onPressed: () {
+            // TODO (Sprint 3): Send _extractedText to Gemini API
+          },
+          icon: const Icon(Icons.auto_awesome, color: Colors.white), // "Sparkles" icon for AI
+          label: const Text("Analyze with AI", style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0056D2),
+            padding: const EdgeInsets.symmetric(vertical: 15),
+          ),
+        ),
       ),
     );
   }
