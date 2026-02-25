@@ -55,10 +55,18 @@ Because the app runs on a physical phone or emulator, it needs to know your comp
 3. Update the baseUrl variable to match your exact IP address:
   final String baseUrl = "[http://192.168.1.100:3000/api](http://192.168.1.100:3000/api)";
 
-### Step 4: Run the Flutter App
+### Step 4: Get a Free Gemini API key
+Our app uses Google's Gemini AI to summarize scanned documents. You need a free API key to run the app.
+
+1. Go to Google AI Studio.
+2. Sign in with your Google account.
+3. Click Get API key on the left menu, then click Create API key.
+4. Copy the generated key. (Do NOT hardcode this key into the codebase!)
+
+### Step 5: Run the Flutter App
 Open a new terminal at the root of the Flutter project (do not close the backend terminal).
 
 1. Get the Flutter packages:
   flutter pub get
-2. Run the app on your connected device or emulator:
-  flutter run
+2. Run the app, passing your Gemini API key as an environment variable:
+  flutter run --dart-define=API_KEY="YOUR_ACTUAL_GEMINI_API_KEY"
