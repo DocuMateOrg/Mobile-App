@@ -30,3 +30,35 @@ Instead of manually installing PostgreSQL, we use Docker to spin up a pre-config
 2. Open a terminal and navigate to the backend folder:
    ```bash
    cd backend
+3. Start the database container:
+  docker-compose up -d
+  (Note: This database runs on port 5432 with the password password123. If you already have PostgreSQL installed on Windows running on 5432, you will need to stop that Windows service first, or update the ports).
+
+### Step 2: Start the Node.js Backend
+Keep your terminal in the backend folder.
+
+1. Install the required dependencies (you only need to do this the first time):
+  npm install
+2. Start the Express server:
+  node server.js
+
+✅ Success Check: You should see 🚀 DocuMate Backend running at http://0.0.0.0:3000 and ✅ Database table ready. Leave this terminal running!
+
+### Step 3: Configure the Flutter App's IP Address (Crucial)
+Because the app runs on a physical phone or emulator, it needs to know your computer's exact Wi-Fi IP address to talk to the Node server.
+
+1. Find your computer's IPv4 address:
+
+  - Windows: Open Command Prompt and type ipconfig
+  - Mac: Open Terminal and type ifconfig | grep inet
+2. Open the Flutter project in VS Code and go to: lib/features/scanner/api_service.dart.
+3. Update the baseUrl variable to match your exact IP address:
+  final String baseUrl = "[http://192.168.1.100:3000/api](http://192.168.1.100:3000/api)";
+
+### Step 4: Run the Flutter App
+Open a new terminal at the root of the Flutter project (do not close the backend terminal).
+
+1. Get the Flutter packages:
+  flutter pub get
+2. Run the app on your connected device or emulator:
+  flutter run

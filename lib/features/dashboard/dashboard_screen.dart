@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
+import 'package:documate/features/scanner/document_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -133,6 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         pages: "1 page", 
                         size: "Local File", 
                         imagePath: doc['local_image_path'], 
+                        content: doc['content'] ?? '', // <-- Passes text to the card
                       );
                     },
                   );
@@ -145,10 +147,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: const CustomBottomNav(),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-           // 1. Wait for the scan process to finish and return a result
+           // Wait for the scan process to finish and return a result
            final result = await context.push('/scan');
            
-           // 2. If the result is exactly 'true', refresh the list!
+           // If the result is exactly 'true', refresh the list
            if (result == true) {
              _loadDocuments();
            }
@@ -207,6 +209,7 @@ class DocumentCard extends StatelessWidget {
   final String pages;
   final String size;
   final String? imagePath; 
+  final String content; // <-- Added content variable
 
   const DocumentCard({
     super.key,
@@ -215,77 +218,95 @@ class DocumentCard extends StatelessWidget {
     required this.pages,
     required this.size,
     this.imagePath,
+    this.content = '', // <-- Added to constructor
   });
 
   @override
   Widget build(BuildContext context) {
     final bool fileExists = imagePath != null && File(imagePath!).existsSync();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.05),
-            spreadRadius: 2,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 50,
-            width: 40,
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
+    return InkWell(
+      onTap: () {
+        if (imagePath != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DocumentDetailScreen(
+                title: title,
+                imagePath: imagePath!,
+                content: content,
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: fileExists
-                  ? Image.file(File(imagePath!), fit: BoxFit.cover)
-                  : const Icon(Icons.description, color: Colors.blue, size: 20),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.05),
+              spreadRadius: 2,
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 50,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: fileExists
+                    ? Image.file(File(imagePath!), fit: BoxFit.cover)
+                    : const Icon(Icons.description, color: Colors.blue, size: 20),
+              ),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "$time • $pages",
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey,
-                    fontSize: 12,
+                  const SizedBox(height: 4),
+                  Text(
+                    "$time • $pages",
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Text(
-            size,
-            style: GoogleFonts.poppins(
-              color: Colors.grey,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+            Text(
+              size,
+              style: GoogleFonts.poppins(
+                color: Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
