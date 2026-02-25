@@ -2,20 +2,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ocr_service.dart';
 import 'local_storage_service.dart'; 
 import 'api_service.dart';
+import 'package:documate/core/constants/gemini_provider.dart';
 
-class ResultScreen extends StatefulWidget {
+// CHANGED: Now a ConsumerStatefulWidget to listen to Riverpod
+class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
   const ResultScreen({super.key, required this.imagePath});
 
   @override
-  State<ResultScreen> createState() => _ResultScreenState();
+  ConsumerState<ResultScreen> createState() => _ResultScreenState();
 }
 
-class _ResultScreenState extends State<ResultScreen> {
-  String _extractedText = "Processing...";
+class _ResultScreenState extends ConsumerState<ResultScreen> {
+  String _extractedText = "Processing OCR...";
   bool _isSaving = false;
   
   final OCRService _ocrService = OCRService();
@@ -26,13 +29,23 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
-    _startOCR();
+    _startOCRAndSummary();
   }
 
-  Future<void> _startOCR() async {
+  Future<void> _startOCRAndSummary() async {
+    // 1. Run local OCR first
     final text = await _ocrService.processImage(widget.imagePath);
+
+    // 2. Update UI
     if (!mounted) return;
-    setState(() => _extractedText = text);
+    setState(() {
+      _extractedText = text.isEmpty ? "No text detected." : text;
+    });
+
+    // 3. Trigger Gemini using the extracted text
+    if (text.isNotEmpty) {
+      ref.read(ocrSummaryProvider.notifier).summarizeText(text);
+    }
   }
 
   Future<void> _saveDocument() async {
@@ -58,7 +71,6 @@ class _ResultScreenState extends State<ResultScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Document Saved!")),
         );
-        // CHANGED: We pop back and pass 'true' to signal a successful save
         context.pop(true); 
       } else {
         _showError("Failed to save data to database.");
@@ -108,28 +120,65 @@ class _ResultScreenState extends State<ResultScreen> {
     super.dispose();
   }
 
+  Widget _buildHeader(String title) {
+    return Text(
+      title.toUpperCase(), 
+      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12)
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Watch the Gemini Summary State from Riverpod
+    final summaryState = ref.watch(ocrSummaryProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Scan Result")),
+      appBar: AppBar(title: Text("Scan Results", style: GoogleFonts.poppins())),
       body: _isSaving 
         ? const Center(child: CircularProgressIndicator()) 
         : Column(
         children: [
           SizedBox(
-            height: 250,
+            height: 200,
             width: double.infinity,
             child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
           ),
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(20),
-              color: Colors.grey[50],
+              color: Colors.white,
               width: double.infinity,
               child: SingleChildScrollView(
-                child: SelectableText(
-                  _extractedText,
-                  style: GoogleFonts.poppins(fontSize: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader("Extracted Text"),
+                    const SizedBox(height: 8),
+                    SelectableText(_extractedText, style: GoogleFonts.poppins()),
+                    
+                    const Divider(height: 40),
+                    
+                    _buildHeader("Summary Text"),
+                    const SizedBox(height: 8),
+                    
+                    // Handle Gemini Loading, Error, and Success states smoothly
+                    summaryState.when(
+                      data: (result) => SelectableText(
+                        result?.summary ?? "Waiting for text...",
+                        style: GoogleFonts.poppins(color: Colors.blueGrey[900]),
+                      ),
+                      loading: () => const Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 8),
+                            Text("Gemini is thinking...", style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
+                    ),
+                  ],
                 ),
               ),
             ),
