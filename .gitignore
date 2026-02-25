@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+backend/node_modules/
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Ignore local database volume data if you use Docker later
+postgres_data/
+pgdata/
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+.env
+.env.local
+.env.development

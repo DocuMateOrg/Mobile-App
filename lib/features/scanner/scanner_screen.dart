@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'result_screen.dart';
 import 'package:image_cropper/image_cropper.dart';
-// We need a global variable to store the list of cameras
+
 List<CameraDescription> cameras = [];
 
 class ScannerScreen extends StatefulWidget {
@@ -26,20 +26,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   Future<void> _initCamera() async {
-    // 1. Request Camera Permission
     var status = await Permission.camera.request();
     if (status.isDenied) {
-      return; // Handle permission denied later
+      return; 
     }
 
-    // 2. Find available cameras
     cameras = await availableCameras();
     
-    // 3. Select the back camera
     if (cameras.isNotEmpty) {
       _controller = CameraController(
-        cameras[0], // Index 0 is usually the back camera
-        ResolutionPreset.high, // High res for text recognition
+        cameras[0], 
+        ResolutionPreset.high, 
         enableAudio: false,
       );
 
@@ -61,33 +58,35 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (!_isCameraInitialized || _controller == null) return;
 
     try {
-      // 1. Capture the image
       final XFile image = await _controller!.takePicture();
       if (!mounted) return;
 
       final croppedFile = await _cropImage(image.path);
 
-      // Navigate to the Result Screen with the image path
       if (croppedFile != null && mounted) {
-        // 3. Navigate to Result Screen with the EDITED image
-        context.push('/result', extra: croppedFile.path);
+        // Wait for the Result Screen to finish!
+        final result = await context.push('/result', extra: croppedFile.path);
+        
+        // If the Result Screen says "true" (Saved!), cascade the pop to the Dashboard
+        if (result == true && mounted) {
+          context.pop(true);
+        }
       }
     } catch (e) {
       print("Error taking picture: $e");
     }
   }
-Future<CroppedFile?> _cropImage(String path) async {
+
+  Future<CroppedFile?> _cropImage(String path) async {
     return await ImageCropper().cropImage(
       sourcePath: path,
-      // This configures the UI of the editor
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Edit Document',
-          toolbarColor: const Color(0xFF0056D2), // Your App Color
+          toolbarColor: const Color(0xFF0056D2), 
           toolbarWidgetColor: Colors.white,
           initAspectRatio: CropAspectRatioPreset.original,
           lockAspectRatio: false,
-          // These controls allow Rotate (Deskew) and Crop
           hideBottomControls: false, 
         ),
         IOSUiSettings(
@@ -110,17 +109,12 @@ Future<CroppedFile?> _cropImage(String path) async {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. The Camera Feed
           SizedBox(
             height: MediaQuery.of(context).size.height,
             width: double.infinity,
             child: CameraPreview(_controller!),
           ),
-
-          // 2. The "Scanner Overlay" (Darkened background with a clear hole)
           const ScannerOverlay(),
-
-          // 3. Top Bar (Back button & Title)
           Positioned(
             top: 50,
             left: 20,
@@ -142,15 +136,11 @@ Future<CroppedFile?> _cropImage(String path) async {
                 ),
                 IconButton(
                   icon: const Icon(Icons.flash_off, color: Colors.white),
-                  onPressed: () {
-                    // Toggle Flash Logic here
-                  },
+                  onPressed: () {},
                 ),
               ],
             ),
           ),
-
-          // 4. Bottom Capture Area
           Positioned(
             bottom: 40,
             left: 0,
@@ -190,7 +180,6 @@ Future<CroppedFile?> _cropImage(String path) async {
   }
 }
 
-// Custom Widget to create the "Cutout" effect
 class ScannerOverlay extends StatelessWidget {
   const ScannerOverlay({super.key});
 
@@ -198,7 +187,7 @@ class ScannerOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColorFiltered(
       colorFilter: const ColorFilter.mode(
-        Colors.black54, // The darkness of the background
+        Colors.black54, 
         BlendMode.srcOut,
       ),
       child: Stack(
@@ -211,12 +200,12 @@ class ScannerOverlay extends StatelessWidget {
           ),
           Center(
             child: Container(
-              height: 500, // Height of the scan area
-              width: 350,  // Width of the scan area
+              height: 500, 
+              width: 350,  
               decoration: BoxDecoration(
-                color: Colors.black, // This color is "cut out"
+                color: Colors.black, 
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.blue, width: 2), // The blue border
+                border: Border.all(color: Colors.blue, width: 2), 
               ),
             ),
           ),
