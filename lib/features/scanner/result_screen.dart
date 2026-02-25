@@ -1,36 +1,41 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ocr_service.dart';
+import '../../core/providers/gemini_provider.dart';
 
-class ResultScreen extends StatefulWidget {
+class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
-
   const ResultScreen({super.key, required this.imagePath});
 
   @override
-  State<ResultScreen> createState() => _ResultScreenState();
+  ConsumerState<ResultScreen> createState() => _ResultScreenState();
 }
 
-class _ResultScreenState extends State<ResultScreen> {
-  String _extractedText = "Processing...";
+class _ResultScreenState extends ConsumerState<ResultScreen> {
+  String _extractedText = "Processing OCR...";
   final OCRService _ocrService = OCRService();
 
   @override
   void initState() {
     super.initState();
-    _startOCR();
+    _startOCRAndSummary();
   }
 
-  Future<void> _startOCR() async {
-    // 1. Run the OCR
+  Future<void> _startOCRAndSummary() async {
+    // 1. Run local OCR first
     final text = await _ocrService.processImage(widget.imagePath);
     
-    // 2. Update UI
     if (!mounted) return;
     setState(() {
-      _extractedText = text;
+      _extractedText = text.isEmpty ? "No text detected." : text;
     });
+
+    // 2. Trigger Gemini using the extracted text (faster than image bytes)
+    if (text.isNotEmpty) {
+      ref.read(ocrSummaryProvider.notifier).summarizeText(text);
+    }
   }
 
   @override
@@ -41,38 +46,46 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final summaryState = ref.watch(ocrSummaryProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Scan Result")),
+      appBar: AppBar(title: Text("Scan Results", style: GoogleFonts.poppins())),
       body: Column(
         children: [
-          // Top: Image Preview
           SizedBox(
-            height: 250,
+            height: 200,
             width: double.infinity,
             child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
           ),
-          
-          // Bottom: Extracted Text
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(20),
-              color: Colors.grey[50],
-              width: double.infinity,
+              color: Colors.white,
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Extracted Text",
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+                    _buildHeader("Extracted Text"),
+                    const SizedBox(height: 8),
+                    SelectableText(_extractedText, style: GoogleFonts.poppins()),
+                    const Divider(height: 40),
+                    _buildHeader("Summary Text"),
+                    const SizedBox(height: 8),
+                    summaryState.when(
+                      data: (result) => SelectableText(
+                        result?.summary ?? "Waiting for text...",
+                        style: GoogleFonts.poppins(color: Colors.blueGrey[900]),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    SelectableText(
-                      _extractedText, // SelectableText lets users copy the text
-                      style: GoogleFonts.poppins(fontSize: 14),
+                      loading: () => const Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 8),
+                            Text("Gemini is thinking...", style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
@@ -82,5 +95,10 @@ class _ResultScreenState extends State<ResultScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildHeader(String title) {
+    return Text(title.toUpperCase(), 
+      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12));
   }
 }
