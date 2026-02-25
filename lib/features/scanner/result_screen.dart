@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'ocr_service.dart';
-import '../../core/providers/gemini_provider.dart';
+
+// IMPORTANT: This import connects the two files
+import '../../core/providers/gemini_provider.dart'; 
+import 'ocr_service.dart'; 
 
 class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
@@ -15,41 +17,77 @@ class ResultScreen extends ConsumerStatefulWidget {
 
 class _ResultScreenState extends ConsumerState<ResultScreen> {
   String _extractedText = "Processing OCR...";
+  bool _isSaving = false;
+  
   final OCRService _ocrService = OCRService();
+  final TextEditingController _titleController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _startOCRAndSummary();
+    // Fire the logic after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startOCRAndSummary();
+    });
   }
 
   Future<void> _startOCRAndSummary() async {
-    // 1. Run local OCR first
-    final text = await _ocrService.processImage(widget.imagePath);
-    
-    if (!mounted) return;
-    setState(() {
-      _extractedText = text.isEmpty ? "No text detected." : text;
-    });
+    try {
+      final text = await _ocrService.processImage(widget.imagePath);
 
-    // 2. Trigger Gemini using the extracted text (faster than image bytes)
-    if (text.isNotEmpty) {
-      ref.read(ocrSummaryProvider.notifier).summarizeText(text);
+      if (!mounted) return;
+
+      setState(() {
+        _extractedText = text.isEmpty ? "No text detected." : text;
+      });
+
+      if (text.trim().isNotEmpty) {
+        // Calls the provider defined in the other file
+        await ref.read(ocrSummaryProvider.notifier).summarizeText(text);
+      } else {
+        // If no text, stop the loading state immediately
+        ref.read(ocrSummaryProvider.notifier).summarizeText(""); 
+      }
+    } catch (e) {
+      if (mounted) setState(() => _extractedText = "OCR Error: $e");
     }
   }
 
-  @override
-  void dispose() {
-    _ocrService.dispose();
-    super.dispose();
+  void _showSaveDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Save Document", style: GoogleFonts.poppins()),
+        content: TextField(
+          controller: _titleController,
+          decoration: const InputDecoration(hintText: "Enter document title"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Document saved!")),
+              );
+            }, 
+            child: const Text("Save")
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watching the provider for state changes (loading, data, error)
     final summaryState = ref.watch(ocrSummaryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text("Scan Results", style: GoogleFonts.poppins())),
+      appBar: AppBar(
+        title: Text("Scan Results", style: GoogleFonts.poppins()),
+        elevation: 0,
+      ),
       body: Column(
         children: [
           SizedBox(
@@ -58,41 +96,51 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
           ),
           Expanded(
-            child: Container(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
-              color: Colors.white,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader("Extracted Text"),
-                    const SizedBox(height: 8),
-                    SelectableText(_extractedText, style: GoogleFonts.poppins()),
-                    const Divider(height: 40),
-                    _buildHeader("Summary Text"),
-                    const SizedBox(height: 8),
-                    summaryState.when(
-                      data: (result) => SelectableText(
-                        result?.summary ?? "Waiting for text...",
-                        style: GoogleFonts.poppins(color: Colors.blueGrey[900]),
-                      ),
-                      loading: () => const Center(
-                        child: Column(
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 8),
-                            Text("Gemini is thinking...", style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader("Extracted Text"),
+                  const SizedBox(height: 8),
+                  SelectableText(_extractedText, style: GoogleFonts.poppins(fontSize: 14)),
+                  const Divider(height: 40),
+                  _buildHeader("Summary Text"),
+                  const SizedBox(height: 8),
+
+                  // Handling the 3 states of the Gemini call
+                  summaryState.when(
+                    data: (result) => SelectableText(
+                      result?.summary ?? "No summary available.",
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.blueGrey[900]),
                     ),
-                  ],
-                ),
+                    loading: () => const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 10),
+                          Text("Gemini is thinking..."),
+                        ],
+                      ),
+                    ),
+                    error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
+                  ),
+                ],
               ),
             ),
           ),
         ],
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: ElevatedButton(
+          onPressed: _showSaveDialog,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0056D2),
+            minimumSize: const Size(double.infinity, 50),
+          ),
+          child: const Text("SAVE DOCUMENT", style: TextStyle(color: Colors.white)),
+        ),
       ),
     );
   }
