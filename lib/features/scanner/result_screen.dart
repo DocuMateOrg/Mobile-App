@@ -16,6 +16,9 @@ class ResultScreen extends ConsumerStatefulWidget {
 class _ResultScreenState extends ConsumerState<ResultScreen> {
   String _extractedText = "Processing OCR...";
   final OCRService _ocrService = OCRService();
+  final LocalStorageService _storageService = LocalStorageService(); 
+  final ApiService _apiService = ApiService();
+  final TextEditingController _titleController = TextEditingController();
 
   @override
   void initState() {
@@ -41,7 +44,15 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   @override
   void dispose() {
     _ocrService.dispose();
+    _titleController.dispose();
     super.dispose();
+  }
+
+  Widget _buildHeader(String title) {
+    return Text(
+      title.toUpperCase(), 
+      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12)
+    );
   }
 
   @override
@@ -93,6 +104,18 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             ),
           ),
         ],
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: ElevatedButton.icon(
+          onPressed: _isSaving ? null : _showSaveDialog,
+          icon: const Icon(Icons.save, color: Colors.white),
+          label: const Text("Save Document", style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0056D2),
+            padding: const EdgeInsets.symmetric(vertical: 15),
+          ),
+        ),
       ),
     );
   }

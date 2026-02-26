@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>DocuMate needs to recognize your speech to search documents.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DocuMate needs microphone access to hear your voice.</string>
 </dict>
 </plist>

@@ -1,21 +1,44 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Added Firebase Auth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
 import 'package:go_router/go_router.dart';
+import 'package:documate/features/scanner/api_service.dart';
+import 'package:documate/features/scanner/document_detail_screen.dart';
+import 'package:documate/screens/voice_search_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
-  // Function to handle logout
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final ApiService _apiService = ApiService();
+  late Future<List<dynamic>> _documentsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocuments();
+  }
+
+  // Fetch data from Node.js backend
+  void _loadDocuments() {
+    setState(() {
+      _documentsFuture = _apiService.fetchUserDocuments();
+    });
+  }
+
   void _handleLogout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
-    // No need to navigate manually; RootAuthWrapper handles it!
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser; // Get logged in user info
+    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -23,8 +46,8 @@ class DashboardScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.logout, color: Colors.black), // Changed to logout for now
-          onPressed: () => _handleLogout(context), 
+          icon: const Icon(Icons.logout, color: Colors.black),
+          onPressed: () => _handleLogout(context),
         ),
         title: Text(
           "Home",
@@ -36,78 +59,111 @@ class DashboardScreen extends StatelessWidget {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.mic, color: Color(0xFF0056D2), size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.orange),
             onPressed: () {},
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Display User Email
-            Text(
-              "Hi, ${user?.email?.split('@')[0] ?? 'User'} 👋",
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              "Manage your docs",
-              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 25),
+      body: RefreshIndicator(
+        onRefresh: () async => _loadDocuments(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(), 
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Hi, ${user?.email?.split('@')[0] ?? 'User'} 👋",
+                style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                "Manage your docs",
+                style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 25),
 
-            const QuickActionRow(),
-            
-            const SizedBox(height: 30),
-            
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "Newest first",
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+              const QuickActionRow(),
+              
+              const SizedBox(height: 30),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Recent Scans",
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                Icon(Icons.arrow_forward, size: 20, color: Colors.blue[700]),
-              ],
-            ),
-            
-            const SizedBox(height: 15),
+                  Icon(Icons.arrow_forward, size: 20, color: Colors.blue[700]),
+                ],
+              ),
+              
+              const SizedBox(height: 15),
 
-            const DocumentCard(
-              title: "Music Festival",
-              time: "Just now",
-              pages: "1 page",
-              size: "12 MB",
-              iconColor: Colors.black,
-            ),
-            const DocumentCard(
-              title: "Carnival Fun Fair",
-              time: "2 hours ago",
-              pages: "1 page",
-              size: "12 MB",
-              iconColor: Colors.red,
-            ),
-             const DocumentCard(
-              title: "Music Party",
-              time: "Yesterday",
-              pages: "1 page",
-              size: "12 MB",
-              iconColor: Colors.black,
-            ),
-          ],
+              FutureBuilder<List<dynamic>>(
+                future: _documentsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (snapshot.hasError) {
+                    return Center(
+                      child: Text("Error loading documents.", style: GoogleFonts.poppins(color: Colors.red)),
+                    );
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Center(
+                      child: Text("No documents scanned yet.", style: GoogleFonts.poppins(color: Colors.grey)),
+                    );
+                  }
+
+                  final documents = snapshot.data!;
+
+                  return ListView.builder(
+                    shrinkWrap: true, 
+                    physics: const NeverScrollableScrollPhysics(), 
+                    itemCount: documents.length,
+                    itemBuilder: (context, index) {
+                      final doc = documents[index];
+                      final rawDate = doc['created_at'] ?? '';
+                      final displayDate = rawDate.length > 10 ? rawDate.substring(0, 10) : 'Just now';
+
+                      return DocumentCard(
+                        title: doc['title'] ?? 'Untitled',
+                        time: displayDate,
+                        pages: "1 page", 
+                        size: "Local File", 
+                        imagePath: doc['local_image_path'], 
+                        content: doc['content'] ?? '', // <-- Passes text to the card
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: const CustomBottomNav(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-            // If you aren't using GoRouter yet, use:
-            // Navigator.push(context, MaterialPageRoute(builder: (context) => const ScanPage()));
-            context.push('/scan');
+        onPressed: () async {
+           // Wait for the scan process to finish and return a result
+           final result = await context.push('/scan');
+           
+           // If the result is exactly 'true', refresh the list
+           if (result == true) {
+             _loadDocuments();
+           }
         },
         backgroundColor: const Color(0xFF0056D2),
         shape: const CircleBorder(),
@@ -117,8 +173,6 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
-
-// --- WIDGETS (Kept the same but added navigation placeholders) ---
 
 class QuickActionRow extends StatelessWidget {
   const QuickActionRow({super.key});
@@ -137,7 +191,7 @@ class QuickActionRow extends StatelessWidget {
   }
 
   Widget _buildActionButton(IconData icon, String label, Color color) {
-    return InkWell( // Added tap effect
+    return InkWell(
       onTap: () {},
       child: Column(
         children: [
@@ -164,7 +218,8 @@ class DocumentCard extends StatelessWidget {
   final String time;
   final String pages;
   final String size;
-  final Color iconColor;
+  final String? imagePath; 
+  final String content; // <-- Added content variable
 
   const DocumentCard({
     super.key,
@@ -172,69 +227,96 @@ class DocumentCard extends StatelessWidget {
     required this.time,
     required this.pages,
     required this.size,
-    required this.iconColor,
+    this.imagePath,
+    this.content = '', // <-- Added to constructor
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.05),
-            spreadRadius: 2,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 50,
-            width: 40,
-            decoration: BoxDecoration(
-              color: iconColor,
-              borderRadius: BorderRadius.circular(8),
+    final bool fileExists = imagePath != null && File(imagePath!).existsSync();
+
+    return InkWell(
+      onTap: () {
+        if (imagePath != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DocumentDetailScreen(
+                title: title,
+                imagePath: imagePath!,
+                content: content,
+              ),
             ),
-            child: const Icon(Icons.description, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.05),
+              spreadRadius: 2,
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 50,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: fileExists
+                    ? Image.file(File(imagePath!), fit: BoxFit.cover)
+                    : const Icon(Icons.description, color: Colors.blue, size: 20),
+              ),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "$time • $pages",
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey,
-                    fontSize: 12,
+                  const SizedBox(height: 4),
+                  Text(
+                    "$time • $pages",
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Text(
-            size,
-            style: GoogleFonts.poppins(
-              color: Colors.grey,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+            Text(
+              size,
+              style: GoogleFonts.poppins(
+                color: Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -257,18 +339,17 @@ class CustomBottomNav extends StatelessWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.grid_view, color: Color(0xFF0056D2)),
-              onPressed: () {}, // Already on Home
+              onPressed: () {},
             ),
             IconButton(
               icon: const Icon(Icons.person_outline, color: Colors.grey),
               onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ProfilePage()),
-    );
-  },
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+              },
             ),
-            
           ],
         ),
       ),

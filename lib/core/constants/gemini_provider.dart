@@ -1,0 +1,48 @@
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class OcrResult {
+  final String summary;
+  OcrResult({required this.summary});
+}
+
+// 1. Create a provider for the API Key
+final geminiApiKeyProvider = Provider<String>((ref) {
+  return const String.fromEnvironment('API_KEY');
+});
+
+// 2. Create the provider for the Generative Model
+final geminiModelProvider = Provider<GenerativeModel>((ref) {
+  final apiKey = ref.watch(geminiApiKeyProvider);
+  
+  if (apiKey.isEmpty) {
+    throw Exception('API_KEY not found. Run with --dart-define=API_KEY=your_key');
+  }
+  
+  return GenerativeModel(
+    model: 'gemini-2.5-flash', 
+    apiKey: apiKey,
+  );
+});
+
+// 3. Notifier to handle the summary state
+final ocrSummaryProvider = AsyncNotifierProvider<OcrSummaryNotifier, OcrResult?>(() {
+  return OcrSummaryNotifier();
+});
+
+class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
+  @override
+  Future<OcrResult?> build() async => null;
+
+  /// Fast text-only summarization
+  Future<void> summarizeText(String text) async {
+    if (text.isEmpty) return;
+    state = const AsyncValue.loading();
+    final model = ref.read(geminiModelProvider);
+    state = await AsyncValue.guard(() async {
+      final prompt = "Summarize the following text in 3 concise bullet points:\n\n$text";
+      final response = await model.generateContent([Content.text(prompt)]);
+      return OcrResult(summary: response.text ?? "No summary generated.");
+    });
+  }
+}
