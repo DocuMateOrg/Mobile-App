@@ -36,6 +36,8 @@ dependencies:
   camera: ^0.10.5
   permission_handler: ^11.3.0
   image_cropper: ^8.0.2
+  speech_to_text: ^7.3.0
+  siri_wave: ^2.3.0
 
 dev_dependencies:
   flutter_test:
