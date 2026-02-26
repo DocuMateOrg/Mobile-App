@@ -58,6 +58,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.mic, color: Color(0xFF0056D2), size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.orange),
             onPressed: () {},
           ),

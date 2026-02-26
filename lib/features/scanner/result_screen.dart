@@ -78,6 +78,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     );
   }
 
+  Widget _buildHeader(String title) {
+    return Text(
+      title.toUpperCase(), 
+      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12)
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watching the provider for state changes (loading, data, error)
