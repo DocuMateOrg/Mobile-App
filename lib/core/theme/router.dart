@@ -9,6 +9,8 @@ import '../../features/scanner/scanner_screen.dart';
 import '../../screens/login_page.dart';  
 import '../../screens/signup_page.dart'; 
 import '../../screens/profile_page.dart'; 
+import '../../features/dashboard/folders_screen.dart';
+import '../../features/dashboard/folder_detail_screen.dart';
 import 'dart:async';
 
 final router = GoRouter(
@@ -64,6 +66,18 @@ final router = GoRouter(
         // Retrieve the imagePath passed from the camera
         final imagePath = state.extra as String; 
         return ResultScreen(imagePath: imagePath);
+      },
+    ),
+    GoRoute(
+      path: '/folders',
+      builder: (context, state) => const FoldersScreen(),
+    ),
+    GoRoute(
+      path: '/folders/:id',
+      builder: (context, state) {
+        final id = int.parse(state.pathParameters['id']!);
+        final folderName = state.extra as String? ?? 'Folder';
+        return FolderDetailScreen(folderId: id, folderName: folderName);
       },
     ),
   ],
