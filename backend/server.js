@@ -1,21 +1,22 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg'); // This is the PostgreSQL library
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 
 // --- 1. CONNECT TO POSTGRESQL ---
-// These credentials match the docker-compose.yml file we created earlier
+// These credentials come from the .env file
 const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'documate',
-    password: process.env.DB_PASSWORD || 'password123',
-    port: process.env.DB_PORT || 5432,
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
 });
 
 // Auto-create the table if it doesn't exist yet

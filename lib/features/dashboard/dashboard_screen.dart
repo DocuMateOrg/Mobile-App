@@ -7,6 +7,7 @@ import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
+import 'package:documate/screens/voice_search_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
