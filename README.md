@@ -61,4 +61,4 @@ Open a new terminal at the root of the Flutter project (do not close the backend
 1. Get the Flutter packages:
   flutter pub get
 2. Run the app, passing your Gemini API key as an environment variable:
-  flutter run --dart-define=API_KEY="YOUR_ACTUAL_GEMINI_API_KEY"
+  flutter run --dart-define=API_KEY="Replace with your Gemini API KEY"
