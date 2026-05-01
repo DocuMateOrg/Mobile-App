@@ -1,5 +1,17 @@
 version: '3.8'
 services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_USER=postgres
+      - DB_PASSWORD=password123
+      - DB_NAME=documate
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      - db
   db:
     image: postgres:15
     environment:

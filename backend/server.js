@@ -11,11 +11,11 @@ app.use(express.json());
 // --- 1. CONNECT TO POSTGRESQL ---
 // These credentials match the docker-compose.yml file we created earlier
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'documate',
-    password: 'password123',
-    port: 5432,
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'documate',
+    password: process.env.DB_PASSWORD || 'password123',
+    port: process.env.DB_PORT || 5432,
 });
 
 // Auto-create the table if it doesn't exist yet

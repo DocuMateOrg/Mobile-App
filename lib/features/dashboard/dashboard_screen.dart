@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
+import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';

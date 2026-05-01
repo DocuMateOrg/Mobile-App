@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // IMPORTANT: This import connects the two files
 import '../../core/providers/gemini_provider.dart'; 
 import 'ocr_service.dart'; 
+import 'api_service.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
@@ -65,11 +66,33 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Document saved!")),
+            onPressed: () async {
+              final title = _titleController.text.trim();
+              if (title.isEmpty) return;
+              
+              Navigator.pop(context); // close dialog
+              setState(() => _isSaving = true);
+              
+              final success = await ApiService().saveDocumentMetadata(
+                title: title,
+                extractedText: _extractedText,
+                localImagePath: widget.imagePath,
               );
+              
+              if (!mounted) return;
+              setState(() => _isSaving = false);
+              
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Document saved successfully!")),
+                );
+                // Return to dashboard and signal a refresh
+                Navigator.pop(context, true); 
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Failed to save document. Check backend connection.")),
+                );
+              }
             }, 
             child: const Text("Save")
           ),
@@ -141,19 +164,16 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(20.0),
         child: ElevatedButton(
-          onPressed: _showSaveDialog,
+          onPressed: _isSaving ? null : _showSaveDialog,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0056D2),
             minimumSize: const Size(double.infinity, 50),
           ),
-          child: const Text("SAVE DOCUMENT", style: TextStyle(color: Colors.white)),
+          child: _isSaving
+              ? const CircularProgressIndicator(color: Colors.white)
+              : const Text("SAVE DOCUMENT", style: TextStyle(color: Colors.white)),
         ),
       ),
     );
-  }
-
-  Widget _buildHeader(String title) {
-    return Text(title.toUpperCase(), 
-      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12));
   }
 }
