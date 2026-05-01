@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-  // Use your laptop's Wi-Fi IPv4 address here!
-  final String baseUrl = "http://192.168.8.101:3000/api"; 
+  // Use localhost because adb reverse tcp:3000 tcp:3000 maps it to your laptop
+  final String baseUrl = "http://127.0.0.1:3000/api"; 
 
   // --- 1. THE SAVE METHOD ---
   Future<bool> saveDocumentMetadata({
