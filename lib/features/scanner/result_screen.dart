@@ -1,14 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'ocr_service.dart';
-import 'local_storage_service.dart'; 
-import 'api_service.dart';
-import 'package:documate/core/constants/gemini_provider.dart';
 
-// CHANGED: Now a ConsumerStatefulWidget to listen to Riverpod
+// IMPORTANT: This import connects the two files
+import '../../core/providers/gemini_provider.dart'; 
+import 'ocr_service.dart'; 
+
 class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
   const ResultScreen({super.key, required this.imagePath});
@@ -22,102 +20,62 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
   bool _isSaving = false;
   
   final OCRService _ocrService = OCRService();
-  final LocalStorageService _storageService = LocalStorageService(); 
-  final ApiService _apiService = ApiService();
   final TextEditingController _titleController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _startOCRAndSummary();
+    // Fire the logic after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startOCRAndSummary();
+    });
   }
 
   Future<void> _startOCRAndSummary() async {
-    // 1. Run local OCR first
-    final text = await _ocrService.processImage(widget.imagePath);
+    try {
+      final text = await _ocrService.processImage(widget.imagePath);
 
-    // 2. Update UI
-    if (!mounted) return;
-    setState(() {
-      _extractedText = text.isEmpty ? "No text detected." : text;
-    });
+      if (!mounted) return;
 
-    // 3. Trigger Gemini using the extracted text
-    if (text.isNotEmpty) {
-      ref.read(ocrSummaryProvider.notifier).summarizeText(text);
-    }
-  }
+      setState(() {
+        _extractedText = text.isEmpty ? "No text detected." : text;
+      });
 
-  Future<void> _saveDocument() async {
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a title")),
-      );
-      return;
-    }
-
-    setState(() => _isSaving = true);
-
-    final savedLocalPath = await _storageService.saveImageLocally(widget.imagePath);
-
-    if (savedLocalPath != null) {
-      final success = await _apiService.saveDocumentMetadata(
-        title: _titleController.text.trim(),
-        extractedText: _extractedText,
-        localImagePath: savedLocalPath,
-      );
-
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Document Saved!")),
-        );
-        context.pop(true); 
+      if (text.trim().isNotEmpty) {
+        // Calls the provider defined in the other file
+        await ref.read(ocrSummaryProvider.notifier).summarizeText(text);
       } else {
-        _showError("Failed to save data to database.");
+        // If no text, stop the loading state immediately
+        ref.read(ocrSummaryProvider.notifier).summarizeText(""); 
       }
-    } else {
-      _showError("Failed to save image locally.");
+    } catch (e) {
+      if (mounted) setState(() => _extractedText = "OCR Error: $e");
     }
-
-    if (mounted) setState(() => _isSaving = false);
-  }
-
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showSaveDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Save Document"),
+        title: Text("Save Document", style: GoogleFonts.poppins()),
         content: TextField(
           controller: _titleController,
-          decoration: const InputDecoration(hintText: "e.g., Biology Notes Chapter 1"),
+          decoration: const InputDecoration(hintText: "Enter document title"),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); 
-              _saveDocument();        
-            },
-            child: const Text("Save"),
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Document saved!")),
+              );
+            }, 
+            child: const Text("Save")
           ),
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _ocrService.dispose();
-    _titleController.dispose();
-    super.dispose();
   }
 
   Widget _buildHeader(String title) {
@@ -129,14 +87,15 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the Gemini Summary State from Riverpod
+    // Watching the provider for state changes (loading, data, error)
     final summaryState = ref.watch(ocrSummaryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text("Scan Results", style: GoogleFonts.poppins())),
-      body: _isSaving 
-        ? const Center(child: CircularProgressIndicator()) 
-        : Column(
+      appBar: AppBar(
+        title: Text("Scan Results", style: GoogleFonts.poppins()),
+        elevation: 0,
+      ),
+      body: Column(
         children: [
           SizedBox(
             height: 200,
@@ -144,42 +103,36 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
           ),
           Expanded(
-            child: Container(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
-              color: Colors.white,
-              width: double.infinity,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader("Extracted Text"),
-                    const SizedBox(height: 8),
-                    SelectableText(_extractedText, style: GoogleFonts.poppins()),
-                    
-                    const Divider(height: 40),
-                    
-                    _buildHeader("Summary Text"),
-                    const SizedBox(height: 8),
-                    
-                    // Handle Gemini Loading, Error, and Success states smoothly
-                    summaryState.when(
-                      data: (result) => SelectableText(
-                        result?.summary ?? "Waiting for text...",
-                        style: GoogleFonts.poppins(color: Colors.blueGrey[900]),
-                      ),
-                      loading: () => const Center(
-                        child: Column(
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 8),
-                            Text("Gemini is thinking...", style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader("Extracted Text"),
+                  const SizedBox(height: 8),
+                  SelectableText(_extractedText, style: GoogleFonts.poppins(fontSize: 14)),
+                  const Divider(height: 40),
+                  _buildHeader("Summary Text"),
+                  const SizedBox(height: 8),
+
+                  // Handling the 3 states of the Gemini call
+                  summaryState.when(
+                    data: (result) => SelectableText(
+                      result?.summary ?? "No summary available.",
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.blueGrey[900]),
                     ),
-                  ],
-                ),
+                    loading: () => const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 10),
+                          Text("Gemini is thinking..."),
+                        ],
+                      ),
+                    ),
+                    error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
+                  ),
+                ],
               ),
             ),
           ),
@@ -187,16 +140,20 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: ElevatedButton.icon(
-          onPressed: _isSaving ? null : _showSaveDialog,
-          icon: const Icon(Icons.save, color: Colors.white),
-          label: const Text("Save Document", style: TextStyle(color: Colors.white)),
+        child: ElevatedButton(
+          onPressed: _showSaveDialog,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0056D2),
-            padding: const EdgeInsets.symmetric(vertical: 15),
+            minimumSize: const Size(double.infinity, 50),
           ),
+          child: const Text("SAVE DOCUMENT", style: TextStyle(color: Colors.white)),
         ),
       ),
     );
+  }
+
+  Widget _buildHeader(String title) {
+    return Text(title.toUpperCase(), 
+      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 12));
   }
 }

@@ -14,7 +14,6 @@ dependencies:
   firebase_auth: ^6.1.2
   firebase_storage: 13.0.6
   http: ^1.2.0
-  
   # UI & Design
   google_fonts: ^6.1.0        
   flutter_svg: ^2.0.9         
@@ -25,9 +24,9 @@ dependencies:
   flutter_riverpod: ^3.2.1    
   
   # Core Functionality (The "Digitization" parts)
-  image_picker: ^1.0.7        
-  google_mlkit_text_recognition: ^0.11.0 
-  google_generative_ai: ^0.4.7 # UPDATED to match your friend's branch
+  image_picker: ^1.0.7        # Select from gallery
+  google_mlkit_text_recognition: ^0.11.0 # The Free OCR engine
+  google_generative_ai: ^0.4.7 # The Gemini API SDK
   
   # Storage
   path_provider: ^2.1.2
