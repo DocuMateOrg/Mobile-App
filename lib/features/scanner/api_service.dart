@@ -40,14 +40,23 @@ class ApiService {
   }
 
   // --- 2. THE FETCH METHOD ---
-  Future<List<dynamic>> fetchUserDocuments({int? folderId}) async {
+  Future<List<dynamic>> fetchUserDocuments({int? folderId, String? searchQuery}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return [];
 
       String url = '$baseUrl/documents/${user.uid}';
+      
+      List<String> queryParams = [];
       if (folderId != null) {
-        url += '?folderId=$folderId';
+        queryParams.add('folderId=$folderId');
+      }
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        queryParams.add('search=${Uri.encodeComponent(searchQuery.trim())}');
+      }
+      
+      if (queryParams.isNotEmpty) {
+        url += '?${queryParams.join('&')}';
       }
 
       final response = await http.get(Uri.parse(url));
