@@ -129,23 +129,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   }
 
                   final documents = snapshot.data!;
+                  final recentDocs = documents.take(5).toList();
 
                   return ListView.builder(
                     shrinkWrap: true, 
                     physics: const NeverScrollableScrollPhysics(), 
-                    itemCount: documents.length,
+                    itemCount: recentDocs.length,
                     itemBuilder: (context, index) {
-                      final doc = documents[index];
+                      final doc = recentDocs[index];
                       final rawDate = doc['created_at'] ?? '';
                       final displayDate = rawDate.length > 10 ? rawDate.substring(0, 10) : 'Just now';
 
                       return DocumentCard(
+                        documentId: doc['id'],
                         title: doc['title'] ?? 'Untitled',
                         time: displayDate,
                         pages: "1 page", 
                         size: "Local File", 
                         imagePath: doc['local_image_path'], 
-                        content: doc['content'] ?? '', // <-- Passes text to the card
+                        content: doc['content'] ?? '',
+                        onRefresh: _loadDocuments,
                       );
                     },
                   );
@@ -183,17 +186,17 @@ class QuickActionRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildActionButton(Icons.document_scanner_outlined, "Scan", Colors.green),
-        _buildActionButton(Icons.edit_outlined, "Edit", Colors.orange),
-        _buildActionButton(Icons.transform_outlined, "Convert", Colors.purple),
-        _buildActionButton(Icons.folder_open_outlined, "Folders", Colors.blue),
+        _buildActionButton(Icons.document_scanner_outlined, "Scan", Colors.green, () => context.push('/scan')),
+        _buildActionButton(Icons.edit_outlined, "Edit", Colors.orange, () {}),
+        _buildActionButton(Icons.transform_outlined, "Convert", Colors.purple, () {}),
+        _buildActionButton(Icons.folder_open_outlined, "Folders", Colors.blue, () => context.push('/folders')),
       ],
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, Color color) {
+  Widget _buildActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       child: Column(
         children: [
           Container(
@@ -215,21 +218,25 @@ class QuickActionRow extends StatelessWidget {
 }
 
 class DocumentCard extends StatelessWidget {
+  final int documentId;
   final String title;
   final String time;
   final String pages;
   final String size;
   final String? imagePath; 
-  final String content; // <-- Added content variable
+  final String content; 
+  final VoidCallback onRefresh;
 
   const DocumentCard({
     super.key,
+    required this.documentId,
     required this.title,
     required this.time,
     required this.pages,
     required this.size,
+    required this.onRefresh,
     this.imagePath,
-    this.content = '', // <-- Added to constructor
+    this.content = '', 
   });
 
   @override
@@ -308,16 +315,121 @@ class DocumentCard extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              size,
-              style: GoogleFonts.poppins(
-                color: Colors.grey,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+            PopupMenuButton<String>(
+              onSelected: (value) => _handleMenuAction(context, value),
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                const PopupMenuItem(value: 'update', child: Text('Update Folder')),
+                const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+              ],
+              icon: const Icon(Icons.more_vert, color: Colors.grey),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _handleMenuAction(BuildContext context, String action) {
+    if (action == 'rename') {
+      _showRenameDialog(context);
+    } else if (action == 'update') {
+      _showUpdateFolderDialog(context);
+    } else if (action == 'delete') {
+      _showDeleteConfirmation(context);
+    }
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final controller = TextEditingController(text: title);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Rename Document"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: "Enter new title"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              final newTitle = controller.text.trim();
+              if (newTitle.isNotEmpty) {
+                final success = await ApiService().updateDocument(documentId, title: newTitle);
+                if (success) onRefresh();
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text("Rename"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpdateFolderDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => FutureBuilder<List<dynamic>>(
+        future: ApiService().fetchFolders(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final folders = snapshot.data!;
+          return AlertDialog(
+            title: const Text("Move to Folder"),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: folders.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return ListTile(
+                      title: const Text("None (Remove from folder)"),
+                      onTap: () async {
+                        await ApiService().updateDocument(documentId, folderId: null);
+                        onRefresh();
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                    );
+                  }
+                  final folder = folders[index - 1];
+                  return ListTile(
+                    title: Text(folder['name']),
+                    onTap: () async {
+                      await ApiService().updateDocument(documentId, folderId: folder['id']);
+                      onRefresh();
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Document"),
+        content: const Text("Are you sure you want to delete this document?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              final success = await ApiService().deleteDocument(documentId);
+              if (success) onRefresh();
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

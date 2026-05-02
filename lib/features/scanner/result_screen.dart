@@ -54,49 +54,133 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
     }
   }
 
-  void _showSaveDialog() {
+  void _showSaveDialog() async {
+    setState(() => _isSaving = true);
+    final folders = await ApiService().fetchFolders();
+    setState(() => _isSaving = false);
+    if (!mounted) return;
+
+    int? selectedFolderId;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Save Document", style: GoogleFonts.poppins()),
-        content: TextField(
-          controller: _titleController,
-          decoration: const InputDecoration(hintText: "Enter document title"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () async {
-              final title = _titleController.text.trim();
-              if (title.isEmpty) return;
-              
-              Navigator.pop(context); // close dialog
-              setState(() => _isSaving = true);
-              
-              final success = await ApiService().saveDocumentMetadata(
-                title: title,
-                extractedText: _extractedText,
-                localImagePath: widget.imagePath,
-              );
-              
-              if (!mounted) return;
-              setState(() => _isSaving = false);
-              
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Document saved successfully!")),
-                );
-                // Return to dashboard and signal a refresh
-                Navigator.pop(context, true); 
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Failed to save document. Check backend connection.")),
-                );
-              }
-            }, 
-            child: const Text("Save")
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text("Save Document", style: GoogleFonts.poppins()),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(hintText: "Enter document title"),
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButton<int?>(
+                        isExpanded: true,
+                        value: selectedFolderId,
+                        hint: const Text("Select Folder (Optional)"),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text("None"),
+                          ),
+                          ...folders.map((folder) => DropdownMenuItem<int?>(
+                                value: folder['id'] as int,
+                                child: Text(folder['name']),
+                              )),
+                        ],
+                        onChanged: (val) => setStateDialog(() => selectedFolderId = val),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.create_new_folder, color: Colors.blue),
+                      onPressed: () async {
+                        // Quick inline creation
+                        final newFolderNameController = TextEditingController();
+                        final newName = await showDialog<String>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("New Folder"),
+                            content: TextField(
+                              controller: newFolderNameController,
+                              decoration: const InputDecoration(hintText: "Folder Name"),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, newFolderNameController.text.trim()),
+                                child: const Text("Create"),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (newName != null && newName.isNotEmpty) {
+                          final created = await ApiService().createFolder(newName);
+                          if (created && mounted) {
+                            // Refetch folders to update the dropdown
+                            final updatedFolders = await ApiService().fetchFolders();
+                            setStateDialog(() {
+                              folders.clear();
+                              folders.addAll(updatedFolders);
+                              // Try to find the new folder to auto-select it
+                              try {
+                                selectedFolderId = folders.firstWhere((f) => f['name'] == newName)['id'];
+                              } catch (_) {}
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close the dialog
+                  
+                  setState(() {
+                    _isSaving = true;
+                  });
+
+                  final title = _titleController.text.trim().isEmpty ? "Untitled Document" : _titleController.text.trim();
+                  
+                  final success = await ApiService().saveDocumentMetadata(
+                    title: title,
+                    extractedText: _extractedText,
+                    localImagePath: widget.imagePath,
+                    folderId: selectedFolderId, // Passed to API!
+                  );
+
+                  if (mounted) {
+                    setState(() {
+                      _isSaving = false;
+                    });
+
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Document saved!")),
+                      );
+                      Navigator.pop(context, true); // Return to ScannerScreen, which returns to Dashboard
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Failed to save document. Please try again.")),
+                      );
+                    }
+                  }
+                }, 
+                child: const Text("Save")
+              ),
+            ],
+          );
+        }
       ),
     );
   }
