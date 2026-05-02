@@ -12,7 +12,6 @@ class VoiceSearchScreen extends StatefulWidget {
 
 class _VoiceSearchScreenState extends State<VoiceSearchScreen> {
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = false;
   bool _isPopping = false;
   
   final String _defaultPrompt = 'Ask me anything...';
@@ -33,7 +32,7 @@ class _VoiceSearchScreenState extends State<VoiceSearchScreen> {
   }
 
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize(
+    await _speechToText.initialize(
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
           _stopWaveform();
@@ -177,7 +176,7 @@ class _VoiceSearchScreenState extends State<VoiceSearchScreen> {
                   border: Border.all(color: Colors.grey[400]!, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 20,
                       spreadRadius: 5,
                     )
@@ -217,7 +216,7 @@ class _VoiceSearchScreenState extends State<VoiceSearchScreen> {
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 10,
                               spreadRadius: 2,
                             )
@@ -246,7 +245,7 @@ class _VoiceSearchScreenState extends State<VoiceSearchScreen> {
                           color: const Color(0xFF0056D2),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0056D2).withOpacity(0.3),
+                              color: const Color(0xFF0056D2).withValues(alpha: 0.3),
                               blurRadius: 15,
                               spreadRadius: 2,
                             )

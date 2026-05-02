@@ -12,36 +12,38 @@ dependencies:
     sdk: flutter
   firebase_core: ^4.4.0
   firebase_auth: ^6.1.2
-  firebase_storage: 13.0.6
+  firebase_storage: ^13.3.0
   http: ^1.2.0
   # UI & Design
-  google_fonts: ^6.1.0        
+  google_fonts: ^8.1.0        
   flutter_svg: ^2.0.9         
-  intl: ^0.19.0               
+  intl: ^0.20.2               
   
   # Navigation & State
-  go_router: ^13.0.0          
+  go_router: ^17.2.3          
   flutter_riverpod: ^3.2.1    
   
   # Core Functionality (The "Digitization" parts)
   image_picker: ^1.0.7        # Select from gallery
-  google_mlkit_text_recognition: ^0.11.0 # The Free OCR engine
+  google_mlkit_text_recognition: ^0.15.1 # The Free OCR engine
   google_generative_ai: ^0.4.7 # The Gemini API SDK
   
   # Storage
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
 
-  camera: ^0.10.5
-  permission_handler: ^11.3.0
-  image_cropper: ^8.0.2
+  camera: ^0.12.0+1
+  permission_handler: ^12.0.1
+  image_cropper: ^12.2.1
   speech_to_text: ^7.3.0
   siri_wave: ^2.3.0
+  open_filex: ^4.7.0
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'result_screen.dart';
 import 'package:image_cropper/image_cropper.dart';
 
 List<CameraDescription> cameras = [];

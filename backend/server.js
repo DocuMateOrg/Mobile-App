@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const PDFDocument = require('pdfkit');
+const { Document, Packer, Paragraph, TextRun } = require('docx');
 const cors = require('cors');
 const { Pool } = require('pg'); // This is the PostgreSQL library
 
@@ -19,9 +21,17 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
+const fs = require('fs');
+const logFile = 'server.log';
+const log = (msg) => {
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    fs.appendFileSync(logFile, entry);
+    console.log(msg);
+};
+
 // Prevent Node.js from crashing if the database connection drops unexpectedly
 pool.on('error', (err, client) => {
-    console.error('Unexpected error on idle client', err);
+    log(`Unexpected error on idle client: ${err.message}`);
 });
 
 
@@ -55,9 +65,9 @@ const initDB = async () => {
             ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL;
         `);
 
-        console.log("✅ Database tables ready.");
+        log("✅ Database tables ready.");
     } catch (err) {
-        console.error("Database Init Error:", err);
+        log(`Database Init Error: ${err.message}`);
     }
 };
 initDB();
@@ -65,7 +75,10 @@ initDB();
 // --- 2. THE SAVE ROUTE (Hits when you press Save) ---
 app.post('/api/documents', async (req, res) => {
     try {
-        const { userId, title, content, localImagePath, folderId } = req.body;
+        let { userId, title, content, localImagePath, folderId } = req.body;
+        userId = userId?.trim();
+        
+        if (!userId) return res.status(400).json({ error: "User ID required" });
         
         // Insert the data into PostgreSQL
         await pool.query(
@@ -74,10 +87,10 @@ app.post('/api/documents', async (req, res) => {
             [userId, title, content, localImagePath, folderId || null]
         );
         
-        console.log("📥 Saved to DB:", title);
+        log(`📥 Saved to DB: ${title} for user ${userId}`);
         res.status(201).json({ message: "Document saved successfully!" });
     } catch (err) {
-        console.error("Database Save Error:", err);
+        log(`Database Save Error: ${err.message}`);
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -85,10 +98,15 @@ app.post('/api/documents', async (req, res) => {
 // --- 3. THE FETCH ROUTE (Hits when you open the Dashboard) ---
 app.get('/api/documents/:userId', async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { folderId, search } = req.query;
+        const userId = req.params.userId?.trim();
+        const folderId = req.query.folderId;
+        const search = req.query.search;
         
-        console.log(`🔍 Flutter is asking for documents for User ID: ${userId}${folderId ? ` (Folder: ${folderId})` : ''}${search ? ` (Search: ${search})` : ''}`);
+        if (!userId) return res.status(400).json({ error: "User ID required" });
+
+        log(`[DEBUG] Fetching docs for UID: "${userId}"`);
+        if (folderId) log(`[DEBUG] Filter by Folder: ${folderId}`);
+        if (search) log(`[DEBUG] Filter by Search: "${search}"`);
 
         let queryStr = `SELECT * FROM documents WHERE user_id = $1`;
         let values = [userId];
@@ -125,11 +143,11 @@ app.get('/api/documents/:userId', async (req, res) => {
 
         const result = await pool.query(queryStr, values);
         
-        console.log(`📦 Found ${result.rows.length} documents for this user.`);
+        log(`📦 Found ${result.rows.length} documents for UID: "${userId}"`);
         
         res.status(200).json(result.rows);
     } catch (err) {
-        console.error("Database Fetch Error:", err);
+        log(`Database Fetch Error: ${err.message}`);
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -216,6 +234,71 @@ app.put('/api/documents/:id', async (req, res) => {
     } catch (err) {
         console.error("Database Update Error:", err);
         res.status(500).json({ error: "Server error" });
+    }
+});
+
+// --- 6. EXPORT ROUTE (Convert to PDF/Word) ---
+app.get('/api/documents/:id/export', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { format } = req.query; // 'pdf' or 'docx'
+
+        const result = await pool.query('SELECT * FROM documents WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Document not found" });
+        }
+
+        const docData = result.rows[0];
+        const fileName = `${docData.title.replace(/\s+/g, '_')}_${id}`;
+
+        if (format === 'pdf') {
+            const doc = new PDFDocument();
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.pdf`);
+
+            doc.pipe(res);
+            doc.fontSize(20).text(docData.title, { align: 'center' });
+            doc.moveDown();
+            doc.fontSize(12).text(docData.content);
+            doc.end();
+
+        } else if (format === 'docx') {
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: docData.title,
+                                    bold: true,
+                                    size: 32,
+                                }),
+                            ],
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: "\n" + docData.content,
+                                    size: 24,
+                                }),
+                            ],
+                        }),
+                    ],
+                }],
+            });
+
+            const buffer = await Packer.toBuffer(doc);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.docx`);
+            res.send(buffer);
+
+        } else {
+            res.status(400).json({ error: "Invalid format. Use 'pdf' or 'docx'." });
+        }
+    } catch (err) {
+        log(`Export Error: ${err.message}`);
+        res.status(500).json({ error: "Server error during export" });
     }
 });
 

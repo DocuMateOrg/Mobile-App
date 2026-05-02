@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class ApiService {
-  // Use your laptop's Wi-Fi IPv4 address here!
-  final String baseUrl = "http://192.168.8.100:3000/api"; 
+  final String baseUrl = "http://localhost:3000/api";
 
   // --- 1. THE SAVE METHOD ---
   Future<bool> saveDocumentMetadata({
@@ -59,10 +60,12 @@ class ApiService {
         url += '?${queryParams.join('&')}';
       }
 
+      print("Fetching from: $url");
       final response = await http.get(Uri.parse(url));
+      print("Status: ${response.statusCode}");
+      print("Body: ${response.body}");
 
       if (response.statusCode == 200) {
-        // Returns a list of maps (your database rows)
         return jsonDecode(response.body); 
       }
       return [];
@@ -142,6 +145,30 @@ class ApiService {
     } catch (e) {
       print("Error updating document: $e");
       return false;
+    }
+  }
+
+  // --- 5. EXPORT DOCUMENT ---
+  Future<String?> downloadExportedFile(int id, String format) async {
+    try {
+      final url = '$baseUrl/documents/$id/export?format=$format';
+      print("DEBUG: Export URL: $url");
+      final response = await http.get(Uri.parse(url));
+      print("DEBUG: Export Response Status: ${response.statusCode}");
+
+      if (response.statusCode == 200) {
+        final directory = await getApplicationDocumentsDirectory();
+        final fileName = "Exported_Doc_${id}_${DateTime.now().millisecondsSinceEpoch}.$format";
+        final filePath = "${directory.path}/$fileName";
+        
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return filePath;
+      }
+      return null;
+    } catch (e) {
+      print("Export Error: $e");
+      return null;
     }
   }
 }

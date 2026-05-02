@@ -50,12 +50,14 @@ class _FoldersScreenState extends State<FoldersScreen> {
               Navigator.pop(context); // close dialog
 
               final success = await _apiService.createFolder(name);
-              if (success && mounted) {
+              if (!context.mounted) return;
+
+              if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Folder created successfully!")),
                 );
                 _loadFolders();
-              } else if (mounted) {
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Failed to create folder.")),
                 );
