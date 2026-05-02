@@ -19,6 +19,12 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
+// Prevent Node.js from crashing if the database connection drops unexpectedly
+pool.on('error', (err, client) => {
+    console.error('Unexpected error on idle client', err);
+});
+
+
 // Auto-create the tables if they don't exist yet
 const initDB = async () => {
     try {
@@ -80,22 +86,44 @@ app.post('/api/documents', async (req, res) => {
 app.get('/api/documents/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        const { folderId } = req.query;
+        const { folderId, search } = req.query;
         
-        console.log(`🔍 Flutter is asking for documents for User ID: ${userId}${folderId ? ` (Folder: ${folderId})` : ''}`);
+        console.log(`🔍 Flutter is asking for documents for User ID: ${userId}${folderId ? ` (Folder: ${folderId})` : ''}${search ? ` (Search: ${search})` : ''}`);
 
-        let result;
+        let queryStr = `SELECT * FROM documents WHERE user_id = $1`;
+        let values = [userId];
+        let paramCount = 2;
+
         if (folderId) {
-            result = await pool.query(
-                `SELECT * FROM documents WHERE user_id = $1 AND folder_id = $2 ORDER BY created_at DESC`,
-                [userId, folderId]
-            );
-        } else {
-            result = await pool.query(
-                `SELECT * FROM documents WHERE user_id = $1 ORDER BY created_at DESC`,
-                [userId]
-            );
+            queryStr += ` AND folder_id = $${paramCount}`;
+            values.push(folderId);
+            paramCount++;
         }
+
+        if (search) {
+            // Split by space, keep words longer than 2 characters to filter out "the", "a", "is", etc.
+            const searchWords = search.split(/\s+/).filter(word => word.length > 2);
+            
+            if (searchWords.length > 0) {
+                let searchConditions = [];
+                searchWords.forEach(word => {
+                    searchConditions.push(`(title ILIKE $${paramCount} OR content ILIKE $${paramCount})`);
+                    values.push(`%${word}%`);
+                    paramCount++;
+                });
+                // Match ANY of the meaningful words (OR logic)
+                queryStr += ` AND (${searchConditions.join(' OR ')})`;
+            } else {
+                // Fallback to exact match if words are too short
+                queryStr += ` AND (title ILIKE $${paramCount} OR content ILIKE $${paramCount})`;
+                values.push(`%${search}%`);
+                paramCount++;
+            }
+        }
+
+        queryStr += ` ORDER BY created_at DESC`;
+
+        const result = await pool.query(queryStr, values);
         
         console.log(`📦 Found ${result.rows.length} documents for this user.`);
         

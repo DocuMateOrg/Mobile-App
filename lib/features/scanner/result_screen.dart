@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // IMPORTANT: This import connects the two files
 import '../../core/providers/gemini_provider.dart'; 
 import 'ocr_service.dart'; 
-import 'package:go_router/go_router.dart';
 import 'api_service.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
@@ -169,7 +168,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Document saved!")),
                       );
-                      context.pop(true); // Return to ScannerScreen, which returns to Dashboard
+                      Navigator.pop(context, true); // Return to ScannerScreen, which returns to Dashboard
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Failed to save document. Please try again.")),
@@ -254,7 +253,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
             backgroundColor: const Color(0xFF0056D2),
             minimumSize: const Size(double.infinity, 50),
           ),
-          child: _isSaving 
+          child: _isSaving
               ? const CircularProgressIndicator(color: Colors.white)
               : const Text("SAVE DOCUMENT", style: TextStyle(color: Colors.white)),
         ),

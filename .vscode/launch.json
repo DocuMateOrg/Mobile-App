@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "documate",
+            "request": "launch",
+            "type": "dart",
+            "toolArgs": [
+                "--dart-define",
+                "API_KEY=AIzaSyCkjm20_c5P8K-Y3TCVoddy7FQ9NdfZSyk"
+            ]
+        }
+    ]
+}

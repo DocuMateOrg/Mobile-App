@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-  // Use localhost because adb reverse tcp:3000 tcp:3000 maps it to your laptop
-  final String baseUrl = "http://127.0.0.1:3000/api"; 
+  // Use your laptop's Wi-Fi IPv4 address here!
+  final String baseUrl = "http://192.168.8.100:3000/api"; 
 
   // --- 1. THE SAVE METHOD ---
   Future<bool> saveDocumentMetadata({
@@ -40,14 +40,23 @@ class ApiService {
   }
 
   // --- 2. THE FETCH METHOD ---
-  Future<List<dynamic>> fetchUserDocuments({int? folderId}) async {
+  Future<List<dynamic>> fetchUserDocuments({int? folderId, String? searchQuery}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return [];
 
       String url = '$baseUrl/documents/${user.uid}';
+      
+      List<String> queryParams = [];
       if (folderId != null) {
-        url += '?folderId=$folderId';
+        queryParams.add('folderId=$folderId');
+      }
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        queryParams.add('search=${Uri.encodeComponent(searchQuery.trim())}');
+      }
+      
+      if (queryParams.isNotEmpty) {
+        url += '?${queryParams.join('&')}';
       }
 
       final response = await http.get(Uri.parse(url));

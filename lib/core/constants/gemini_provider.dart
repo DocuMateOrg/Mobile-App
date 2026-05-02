@@ -8,7 +8,7 @@ class OcrResult {
 
 // 1. Create a provider for the API Key
 final geminiApiKeyProvider = Provider<String>((ref) {
-  return const String.fromEnvironment('API_KEY');
+  return const String.fromEnvironment('API_KEY', defaultValue: 'AIzaSyCkjm20_c5P8K-Y3TCVoddy7FQ9NdfZSyk');
 });
 
 // 2. Create the provider for the Generative Model

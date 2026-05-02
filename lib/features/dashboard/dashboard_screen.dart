@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
+import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
@@ -18,22 +20,53 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final ApiService _apiService = ApiService();
   late Future<List<dynamic>> _documentsFuture;
+  
+  String _searchQuery = '';
+  Timer? _debounce;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadDocuments();
   }
+  
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (_searchQuery != query) {
+        setState(() {
+          _searchQuery = query;
+        });
+        _loadDocuments();
+      }
+    });
+  }
 
   // Fetch data from Node.js backend
   void _loadDocuments() {
     setState(() {
-      _documentsFuture = _apiService.fetchUserDocuments();
+      _documentsFuture = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
     });
   }
 
   void _handleLogout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
+  }
+
+  Widget _buildPlaceholderLine(double width) {
+    return Container(
+      width: width,
+      height: 4,
+      color: Colors.grey[300],
+    );
   }
 
   @override
@@ -45,10 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.logout, color: Colors.black),
-          onPressed: () => _handleLogout(context),
-        ),
+        iconTheme: const IconThemeData(color: Colors.black),
         title: Text(
           "Home",
           style: GoogleFonts.poppins(
@@ -56,22 +86,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: true,
+        centerTitle: false,
+        titleSpacing: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.mic, color: Color(0xFF0056D2), size: 28),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
-              );
-            },
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: Colors.black, size: 28),
+                onPressed: () {},
+              ),
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    '2',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.orange),
-            onPressed: () {},
-          ),
+          const SizedBox(width: 10),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Color(0xFF0056D2)),
+              child: Text("Menu", style: GoogleFonts.poppins(color: Colors.white, fontSize: 24)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Logout'),
+              onTap: () => _handleLogout(context),
+            ),
+          ],
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async => _loadDocuments(),
@@ -90,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 "Manage your docs",
                 style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 15),
 
               const QuickActionRow(),
               
@@ -100,7 +168,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Recent Scans",
+                    "Recent Documents",
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -122,8 +190,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Text("Error loading documents.", style: GoogleFonts.poppins(color: Colors.red)),
                     );
                   } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Center(
-                      child: Text("No documents scanned yet.", style: GoogleFonts.poppins(color: Colors.grey)),
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 40.0),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 150,
+                                  height: 150,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Container(
+                                  width: 100,
+                                  height: 130,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        height: 30,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF0056D2),
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                                        ),
+                                        padding: const EdgeInsets.all(8),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Container(
+                                            height: 4,
+                                            width: 40,
+                                            color: Colors.white.withOpacity(0.5),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 15),
+                                      _buildPlaceholderLine(60),
+                                      const SizedBox(height: 8),
+                                      _buildPlaceholderLine(80),
+                                      const SizedBox(height: 8),
+                                      _buildPlaceholderLine(60),
+                                      const SizedBox(height: 8),
+                                      _buildPlaceholderLine(40),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Text("No Recent Files", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 14)),
+                          ],
+                        ),
+                      ),
                     );
                   }
 
@@ -157,22 +289,100 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const CustomBottomNav(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-           // Wait for the scan process to finish and return a result
-           final result = await context.push('/scan');
-           
-           // If the result is exactly 'true', refresh the list
-           if (result == true) {
-             _loadDocuments();
-           }
-        },
-        backgroundColor: const Color(0xFF0056D2),
-        shape: const CircleBorder(),
-        child: const Icon(Icons.camera_alt, color: Colors.white),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.only(left: 20, right: 20, bottom: 30, top: 10),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Search Bar
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 16),
+                  prefixIcon: const Icon(Icons.search, color: Colors.black54, size: 24),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.speaker_phone_outlined, color: Colors.black54),
+                    onPressed: () async {
+                      final String? voiceQuery = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
+                      );
+                      if (voiceQuery != null && voiceQuery.trim().isNotEmpty) {
+                        _searchController.text = voiceQuery.trim();
+                        _onSearchChanged(voiceQuery.trim());
+                      }
+                    },
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Bottom Action Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0056D2),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.grid_view, color: Color(0xFF0056D2), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const ProfilePage()),
+                          );
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 8.0),
+                          child: Icon(Icons.person_outline, color: Colors.white, size: 24),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FloatingActionButton(
+                  onPressed: () async {
+                    final result = await context.push('/scan');
+                    if (result == true) {
+                      _loadDocuments();
+                    }
+                  },
+                  backgroundColor: const Color(0xFF0056D2),
+                  shape: const CircleBorder(),
+                  elevation: 0,
+                  child: const Icon(Icons.camera_alt, color: Colors.white),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }
@@ -185,15 +395,16 @@ class QuickActionRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildActionButton(Icons.document_scanner_outlined, "Scan", Colors.green, () => context.push('/scan')),
-        _buildActionButton(Icons.edit_outlined, "Edit", Colors.orange, () {}),
-        _buildActionButton(Icons.transform_outlined, "Convert", Colors.purple, () {}),
-        _buildActionButton(Icons.folder_open_outlined, "Folders", Colors.blue, () => context.push('/folders')),
+        _buildActionButton(Icons.document_scanner_outlined, "scan", const Color(0xFFC0FE72), const Color(0xFF88C928), () => context.push('/scan')),
+        _buildActionButton(Icons.edit_outlined, "edit", const Color(0xFFFFDB99), const Color(0xFFD69A2D), () {}),
+        _buildActionButton(Icons.transform_outlined, "convert", const Color(0xFFC2D3FF), const Color(0xFF5A7ED2), () {}),
+        _buildActionButton(Icons.folder_open_outlined, "folders", const Color(0xFFE4C1F9), const Color(0xFF9E5CBF), () => context.push('/folders')),
+        _buildActionButton(Icons.cloud_upload_outlined, "uploaded", const Color(0xFFFFB3B3), const Color(0xFFD9534F), () {}),
       ],
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildActionButton(IconData icon, String label, Color bgColor, Color iconColor, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       child: Column(
@@ -202,14 +413,13 @@ class QuickActionRow extends StatelessWidget {
             height: 60,
             width: 60,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: bgColor,
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.3)),
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(icon, color: iconColor, size: 28),
           ),
           const SizedBox(height: 8),
-          Text(label, style: GoogleFonts.poppins(fontSize: 12)),
+          Text(label, style: GoogleFonts.poppins(fontSize: 12, color: Colors.black87)),
         ],
       ),
     );
