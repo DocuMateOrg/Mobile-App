@@ -8,7 +8,6 @@ import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
-import 'package:documate/screens/voice_search_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -50,11 +49,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // Fetch data from Node.js backend
-  void _loadDocuments() {
+  Future<void> _loadDocuments() async {
+    final user = FirebaseAuth.instance.currentUser;
+    print("DEBUG: Loading documents for user: ${user?.uid}");
+    
+    final future = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
     setState(() {
-      _documentsFuture = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
+      _documentsFuture = future;
     });
+
+    try {
+      final docs = await future;
+      print("DEBUG: Found ${docs.length} documents");
+    } catch (e) {
+      print("DEBUG: Error loading documents: $e");
+    }
   }
 
   void _handleLogout(BuildContext context) async {
@@ -187,7 +196,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     return const Center(child: CircularProgressIndicator());
                   } else if (snapshot.hasError) {
                     return Center(
-                      child: Text("Error loading documents.", style: GoogleFonts.poppins(color: Colors.red)),
+                      child: Column(
+                        children: [
+                          Text("Error loading documents.", style: GoogleFonts.poppins(color: Colors.red)),
+                          const SizedBox(height: 10),
+                          ElevatedButton(
+                            onPressed: _loadDocuments,
+                            child: const Text("Try Again"),
+                          ),
+                        ],
+                      ),
                     );
                   } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return Padding(
@@ -214,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
+                                        color: Colors.black.withValues(alpha: 0.05),
                                         blurRadius: 10,
                                         spreadRadius: 2,
                                       ),
@@ -234,7 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           child: Container(
                                             height: 4,
                                             width: 40,
-                                            color: Colors.white.withOpacity(0.5),
+                                            color: Colors.white.withValues(alpha: 0.5),
                                           ),
                                         ),
                                       ),
@@ -262,12 +280,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final documents = snapshot.data!;
                   final recentDocs = documents.take(5).toList();
 
-                  return ListView.builder(
-                    shrinkWrap: true, 
-                    physics: const NeverScrollableScrollPhysics(), 
-                    itemCount: recentDocs.length,
-                    itemBuilder: (context, index) {
-                      final doc = recentDocs[index];
+                  return Column(
+                    children: recentDocs.map((doc) {
                       final rawDate = doc['created_at'] ?? '';
                       final displayDate = rawDate.length > 10 ? rawDate.substring(0, 10) : 'Just now';
 
@@ -281,7 +295,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         content: doc['content'] ?? '',
                         onRefresh: _loadDocuments,
                       );
-                    },
+                    }).toList(),
                   );
                 },
               ),
@@ -459,6 +473,7 @@ class DocumentCard extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (context) => DocumentDetailScreen(
+                documentId: documentId,
                 title: title,
                 imagePath: imagePath!,
                 content: content,
@@ -476,7 +491,7 @@ class DocumentCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.05),
+              color: Colors.grey.withValues(alpha: 0.05),
               spreadRadius: 2,
               blurRadius: 10,
               offset: const Offset(0, 4),

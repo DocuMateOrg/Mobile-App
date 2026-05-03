@@ -1,13 +1,30 @@
 require('dotenv').config();
 const express = require('express');
+const PDFDocument = require('pdfkit');
+const { Document, Packer, Paragraph, TextRun } = require('docx');
+const multer = require('multer');
+const path = require('path');
 const cors = require('cors');
-const { Pool } = require('pg'); // This is the PostgreSQL library
+const { Pool } = require('pg'); 
+
+// Configure Multer for image storage
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 
 // --- 1. CONNECT TO POSTGRESQL ---
 // These credentials come from the .env file
@@ -19,9 +36,23 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
+const fs = require('fs');
+const logFile = 'server.log';
+const log = (msg) => {
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    fs.appendFileSync(logFile, entry);
+    console.log(msg);
+};
+
+// Request Logger for debugging (Moved here to ensure 'log' is defined)
+app.use((req, res, next) => {
+    log(`DEBUG: ${req.method} request to ${req.url}`);
+    next();
+});
+
 // Prevent Node.js from crashing if the database connection drops unexpectedly
 pool.on('error', (err, client) => {
-    console.error('Unexpected error on idle client', err);
+    log(`Unexpected error on idle client: ${err.message}`);
 });
 
 
@@ -43,41 +74,57 @@ const initDB = async () => {
                 user_id VARCHAR(255) NOT NULL,
                 title VARCHAR(255) NOT NULL,
                 content TEXT,
-                local_image_path TEXT NOT NULL,
+                local_image_path TEXT,
+                server_image_path TEXT,
                 folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
-        // If documents table already existed without folder_id, add it safely
+        // Update schema safely
         await pool.query(`
             ALTER TABLE documents 
             ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL;
         `);
+        await pool.query(`
+            ALTER TABLE documents 
+            ADD COLUMN IF NOT EXISTS server_image_path TEXT;
+        `);
 
-        console.log("✅ Database tables ready.");
+        log("✅ Database tables ready.");
     } catch (err) {
-        console.error("Database Init Error:", err);
+        log(`Database Init Error: ${err.message}`);
     }
 };
 initDB();
 
-// --- 2. THE SAVE ROUTE (Hits when you press Save) ---
-app.post('/api/documents', async (req, res) => {
+// --- 2. THE SAVE ROUTE (Updated for image upload) ---
+app.post('/api/documents', upload.single('image'), async (req, res) => {
     try {
-        const { userId, title, content, localImagePath, folderId } = req.body;
+        log(`DEBUG: Save Request - Body keys: ${Object.keys(req.body || {})}, File: ${req.file ? req.file.filename : 'None'}`);
+        const body = req.body || {};
+        let { userId, title, content, localImagePath, folderId } = body;
+        const serverImagePath = req.file ? req.file.path : null;
+        
+        userId = userId?.trim();
+        if (!userId) return res.status(400).json({ error: "User ID required" });
+
+        // Provide defaults to prevent SQL NOT NULL errors
+        title = title || "Untitled Document";
+        content = content || "";
+        localImagePath = localImagePath || "";
         
         // Insert the data into PostgreSQL
         await pool.query(
-            `INSERT INTO documents (user_id, title, content, local_image_path, folder_id) 
-             VALUES ($1, $2, $3, $4, $5)`,
-            [userId, title, content, localImagePath, folderId || null]
+            `INSERT INTO documents (user_id, title, content, local_image_path, server_image_path, folder_id) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [userId, title, content, localImagePath, serverImagePath, folderId || null]
         );
         
-        console.log("📥 Saved to DB:", title);
+        log(`📥 Saved to DB: ${title} for user ${userId} (Image: ${serverImagePath})`);
         res.status(201).json({ message: "Document saved successfully!" });
     } catch (err) {
-        console.error("Database Save Error:", err);
+        log(`Database Save Error: ${err.message}`);
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -85,10 +132,15 @@ app.post('/api/documents', async (req, res) => {
 // --- 3. THE FETCH ROUTE (Hits when you open the Dashboard) ---
 app.get('/api/documents/:userId', async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { folderId, search } = req.query;
+        const userId = req.params.userId?.trim();
+        const folderId = req.query.folderId;
+        const search = req.query.search;
         
-        console.log(`🔍 Flutter is asking for documents for User ID: ${userId}${folderId ? ` (Folder: ${folderId})` : ''}${search ? ` (Search: ${search})` : ''}`);
+        if (!userId) return res.status(400).json({ error: "User ID required" });
+
+        log(`[DEBUG] Fetching docs for UID: "${userId}"`);
+        if (folderId) log(`[DEBUG] Filter by Folder: ${folderId}`);
+        if (search) log(`[DEBUG] Filter by Search: "${search}"`);
 
         let queryStr = `SELECT * FROM documents WHERE user_id = $1`;
         let values = [userId];
@@ -125,11 +177,11 @@ app.get('/api/documents/:userId', async (req, res) => {
 
         const result = await pool.query(queryStr, values);
         
-        console.log(`📦 Found ${result.rows.length} documents for this user.`);
+        log(`📦 Found ${result.rows.length} documents for UID: "${userId}"`);
         
         res.status(200).json(result.rows);
     } catch (err) {
-        console.error("Database Fetch Error:", err);
+        log(`Database Fetch Error: ${err.message}`);
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -219,7 +271,104 @@ app.put('/api/documents/:id', async (req, res) => {
     }
 });
 
+// --- 6. EXPORT ROUTE (Convert to PDF/Word) ---
+app.get('/api/documents/:id/export', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { format } = req.query; // 'pdf' or 'docx'
+
+        const result = await pool.query('SELECT * FROM documents WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Document not found" });
+        }
+
+        const docData = result.rows[0];
+        const fileName = `${docData.title.replace(/\s+/g, '_')}_${id}`;
+
+        if (format === 'pdf') {
+            const doc = new PDFDocument();
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.pdf`);
+
+            doc.pipe(res);
+            
+            // 1. Add Title
+            doc.fontSize(20).text(docData.title, { align: 'center' });
+            doc.moveDown();
+
+            // 2. Add Image if available
+            if (docData.server_image_path && fs.existsSync(docData.server_image_path)) {
+                log(`Adding image to PDF: ${docData.server_image_path}`);
+                doc.image(docData.server_image_path, {
+                    fit: [500, 600],
+                    align: 'center',
+                    valign: 'center'
+                });
+            } else {
+                log(`No image found for export: ${docData.server_image_path}`);
+                doc.fontSize(12).text("[Image not available]", { align: 'center' });
+            }
+
+            doc.end();
+
+        } else if (format === 'docx') {
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: docData.title,
+                                    bold: true,
+                                    size: 32,
+                                }),
+                            ],
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: "\n" + docData.content,
+                                    size: 24,
+                                }),
+                            ],
+                        }),
+                    ],
+                }],
+            });
+
+            const buffer = await Packer.toBuffer(doc);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.docx`);
+            res.send(buffer);
+
+        } else {
+            res.status(400).json({ error: "Invalid format. Use 'pdf' or 'docx'." });
+        }
+    } catch (err) {
+        log(`Export Error: ${err.message}`);
+        res.status(500).json({ error: "Server error during export" });
+    }
+});
+
 // --- START SERVER ---
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 DocuMate Backend running at http://0.0.0.0:${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 DocuMate Backend running at http://localhost:${PORT}`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        log(`CRITICAL ERROR: Port ${PORT} is already in use. Please close the other process or use a different port.`);
+    } else {
+        log(`CRITICAL ERROR: Server failed to start: ${err.message}`);
+    }
+    process.exit(1);
+});
+
+// Catch silent crashes
+process.on('unhandledRejection', (reason, promise) => {
+    log(`CRITICAL ERROR: Unhandled Rejection at: ${promise}, reason: ${reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+    log(`CRITICAL ERROR: Uncaught Exception: ${err.message}\nStack: ${err.stack}`);
+    process.exit(1);
 });

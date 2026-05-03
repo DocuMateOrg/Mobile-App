@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// IMPORTANT: This import connects the two files
+import 'package:go_router/go_router.dart';
 import '../../core/providers/gemini_provider.dart'; 
 import 'ocr_service.dart'; 
 import 'api_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class ResultScreen extends ConsumerStatefulWidget {
   final String imagePath;
@@ -152,11 +154,21 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
                   final title = _titleController.text.trim().isEmpty ? "Untitled Document" : _titleController.text.trim();
                   
+                  // 1. Move image to persistent storage
+                  final directory = await getApplicationDocumentsDirectory();
+                  final String fileName = p.basename(widget.imagePath);
+                  final String persistentPath = p.join(directory.path, fileName);
+                  
+                  await File(widget.imagePath).copy(persistentPath);
+
+                  // Prioritize the AI-structured text for saving
+                  final structuredText = ref.read(ocrSummaryProvider).value?.summary ?? _extractedText;
+
                   final success = await ApiService().saveDocumentMetadata(
                     title: title,
-                    extractedText: _extractedText,
-                    localImagePath: widget.imagePath,
-                    folderId: selectedFolderId, // Passed to API!
+                    extractedText: structuredText,
+                    localImagePath: persistentPath,
+                    folderId: selectedFolderId,
                   );
 
                   if (mounted) {
@@ -168,7 +180,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Document saved!")),
                       );
-                      Navigator.pop(context, true); // Return to ScannerScreen, which returns to Dashboard
+                      context.pop(true); // Return to ScannerScreen, which returns to Dashboard
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Failed to save document. Please try again.")),
@@ -219,13 +231,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                   const SizedBox(height: 8),
                   SelectableText(_extractedText, style: GoogleFonts.poppins(fontSize: 14)),
                   const Divider(height: 40),
-                  _buildHeader("Summary Text"),
+                  _buildHeader("Summary"),
                   const SizedBox(height: 8),
 
                   // Handling the 3 states of the Gemini call
                   summaryState.when(
                     data: (result) => SelectableText(
-                      result?.summary ?? "No summary available.",
+                      result?.summary ?? "No structured version available.",
                       style: GoogleFonts.poppins(fontSize: 14, color: Colors.blueGrey[900]),
                     ),
                     loading: () => const Center(
@@ -233,7 +245,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                         children: [
                           CircularProgressIndicator(),
                           SizedBox(height: 10),
-                          Text("Gemini is thinking..."),
+                          Text("Formatting document..."),
                         ],
                       ),
                     ),

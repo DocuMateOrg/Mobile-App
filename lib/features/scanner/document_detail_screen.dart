@@ -1,30 +1,98 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
+import 'package:open_filex/open_filex.dart';
+import 'api_service.dart';
 
-class DocumentDetailScreen extends StatelessWidget {
+class DocumentDetailScreen extends StatefulWidget {
+  final int documentId;
   final String title;
   final String imagePath;
-  final String content; // The extracted OCR text
+  final String content; 
 
   const DocumentDetailScreen({
     super.key,
+    required this.documentId,
     required this.title,
     required this.imagePath,
     required this.content,
   });
 
   @override
+  State<DocumentDetailScreen> createState() => _DocumentDetailScreenState();
+}
+
+class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
+  bool _isExporting = false;
+
+  void _exportDocument(String format) async {
+    print("DEBUG: Exporting document ${widget.documentId} to $format");
+    setState(() => _isExporting = true);
+
+    try {
+      final filePath = await ApiService().downloadExportedFile(widget.documentId, format);
+      print("DEBUG: Exported file path: $filePath");
+      
+      if (filePath != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Exported to $format successfully!")),
+          );
+        }
+        await OpenFilex.open(filePath);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to export document.")),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bool fileExists = File(imagePath).existsSync();
+    final bool fileExists = File(widget.imagePath).existsSync();
+    print("DEBUG: Detail Screen - ID: ${widget.documentId}, Path: ${widget.imagePath}, Exists: $fileExists");
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        title: Text(widget.title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        actions: [
+          if (_isExporting)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            PopupMenuButton<String>(
+              onSelected: _exportDocument,
+              icon: const Icon(Icons.file_download_outlined),
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'pdf', child: Text("Export as PDF")),
+                const PopupMenuItem(value: 'docx', child: Text("Export as Word")),
+              ],
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -33,7 +101,7 @@ class DocumentDetailScreen extends StatelessWidget {
             height: 350,
             width: double.infinity,
             child: fileExists
-                ? Image.file(File(imagePath), fit: BoxFit.cover)
+                ? Image.file(File(widget.imagePath), fit: BoxFit.cover)
                 : Container(
                     color: Colors.grey[200],
                     child: const Center(
@@ -62,7 +130,7 @@ class DocumentDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
                     SelectableText(
-                      content.isNotEmpty ? content : "No text was extracted for this document.",
+                      widget.content.isNotEmpty ? widget.content : "No text was extracted for this document.",
                       style: GoogleFonts.poppins(fontSize: 15, height: 1.5),
                     ),
                   ],
@@ -74,4 +142,4 @@ class DocumentDetailScreen extends StatelessWidget {
       ),
     );
   }
-}
+}
