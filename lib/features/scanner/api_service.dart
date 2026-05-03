@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class ApiService {
-  final String baseUrl = "http://localhost:3000/api";
+  final String baseUrl = "http://127.0.0.1:3000/api";
 
   // --- 1. THE SAVE METHOD ---
   Future<bool> saveDocumentMetadata({
@@ -16,26 +16,36 @@ class ApiService {
   }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/documents'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${user?.uid}', 
-        },
-        body: jsonEncode({
-          'userId': user?.uid,
-          'title': title,
-          'content': extractedText,
-          'localImagePath': localImagePath, 
-          'folderId': folderId,
-          'createdAt': DateTime.now().toIso8601String(),
-        }),
+      if (user == null) return false;
+
+      final uri = Uri.parse('$baseUrl/documents');
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add fields
+      request.fields['userId'] = user.uid;
+      request.fields['title'] = title;
+      request.fields['content'] = extractedText;
+      request.fields['localImagePath'] = localImagePath;
+      if (folderId != null) {
+        request.fields['folderId'] = folderId.toString();
+      }
+
+      // Add file
+      final file = await http.MultipartFile.fromPath(
+        'image', 
+        localImagePath,
       );
+      request.files.add(file);
+
+      // Add headers
+      request.headers['Authorization'] = 'Bearer ${user.uid}';
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
-      print("Error saving to API: $e");
+      print("Error saving with upload: $e");
       return false;
     }
   }

@@ -161,9 +161,12 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                   
                   await File(widget.imagePath).copy(persistentPath);
 
+                  // Prioritize the AI-structured text for saving
+                  final structuredText = ref.read(ocrSummaryProvider).value?.summary ?? _extractedText;
+
                   final success = await ApiService().saveDocumentMetadata(
                     title: title,
-                    extractedText: _extractedText,
+                    extractedText: structuredText,
                     localImagePath: persistentPath,
                     folderId: selectedFolderId,
                   );
@@ -228,13 +231,13 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                   const SizedBox(height: 8),
                   SelectableText(_extractedText, style: GoogleFonts.poppins(fontSize: 14)),
                   const Divider(height: 40),
-                  _buildHeader("Summary Text"),
+                  _buildHeader("Summary"),
                   const SizedBox(height: 8),
 
                   // Handling the 3 states of the Gemini call
                   summaryState.when(
                     data: (result) => SelectableText(
-                      result?.summary ?? "No summary available.",
+                      result?.summary ?? "No structured version available.",
                       style: GoogleFonts.poppins(fontSize: 14, color: Colors.blueGrey[900]),
                     ),
                     loading: () => const Center(
@@ -242,7 +245,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                         children: [
                           CircularProgressIndicator(),
                           SizedBox(height: 10),
-                          Text("Gemini is thinking..."),
+                          Text("Formatting document..."),
                         ],
                       ),
                     ),

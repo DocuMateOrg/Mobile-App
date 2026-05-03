@@ -42,7 +42,17 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
     final model = ref.read(geminiModelProvider);
 
     state = await AsyncValue.guard(() async {
-      final prompt = "Summarize these technical notes in 3 concise bullet points:\n\n$text";
+      final prompt = """
+Reorganize the following raw OCR text into a professional, structured document. 
+Rules:
+1. Identify logical sections/topics.
+2. Format topics by centering them using decorative symbols (e.g., === TOPIC NAME ===).
+3. Under each topic, provide the content using clear bullet points.
+4. Correct any obvious OCR typos or misread characters while preserving the original information.
+
+Raw OCR Text:
+$text
+""";
       final response = await model.generateContent([Content.text(prompt)]);
       
       if (response.text == null || response.text!.isEmpty) {
