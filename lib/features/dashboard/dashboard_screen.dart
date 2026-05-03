@@ -292,6 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         pages: "1 page", 
                         size: "Local File", 
                         imagePath: doc['local_image_path'], 
+                        serverImagePath: doc['server_image_path'], 
                         content: doc['content'] ?? '',
                         onRefresh: _loadDocuments,
                       );
@@ -447,6 +448,7 @@ class DocumentCard extends StatelessWidget {
   final String pages;
   final String size;
   final String? imagePath; 
+  final String? serverImagePath; 
   final String content; 
   final VoidCallback onRefresh;
 
@@ -459,6 +461,7 @@ class DocumentCard extends StatelessWidget {
     required this.size,
     required this.onRefresh,
     this.imagePath,
+    this.serverImagePath,
     this.content = '', 
   });
 
@@ -475,7 +478,8 @@ class DocumentCard extends StatelessWidget {
               builder: (context) => DocumentDetailScreen(
                 documentId: documentId,
                 title: title,
-                imagePath: imagePath!,
+                imagePath: imagePath ?? '',
+                serverImagePath: serverImagePath,
                 content: content,
               ),
             ),
@@ -509,9 +513,16 @@ class DocumentCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: fileExists
+              child: fileExists
                     ? Image.file(File(imagePath!), fit: BoxFit.cover)
-                    : const Icon(Icons.description, color: Colors.blue, size: 20),
+                    : (serverImagePath != null 
+                        ? Image.network(
+                            "http://127.0.0.1:3000/${serverImagePath!.replaceAll('\\', '/')}",
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => 
+                              const Icon(Icons.broken_image, color: Colors.grey, size: 20),
+                          )
+                        : const Icon(Icons.description, color: Colors.blue, size: 20)),
               ),
             ),
             const SizedBox(width: 15),

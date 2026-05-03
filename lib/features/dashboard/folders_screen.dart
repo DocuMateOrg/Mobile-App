@@ -103,14 +103,34 @@ class _FoldersScreenState extends State<FoldersScreen> {
                   elevation: 2,
                   margin: const EdgeInsets.only(bottom: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    leading: const Icon(Icons.folder, color: Colors.blue, size: 40),
-                    title: Text(folder['name'] ?? 'Untitled', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                    subtitle: Text("Created: ${folder['created_at']?.substring(0, 10) ?? ''}"),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      context.push('/folders/${folder['id']}', extra: folder['name']);
-                    },
+                  child: InkWell(
+                    onTap: () => context.push('/folders/${folder['id']}', extra: folder['name']),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.folder, color: Colors.blue, size: 40),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(folder['name'] ?? 'Untitled', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16)),
+                                Text("Created: ${folder['created_at']?.substring(0, 10) ?? ''}", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
+                            onPressed: () {
+                              print("DEBUG: Delete Button Pressed for folder ${folder['id']}");
+                              _showDeleteFolderConfirmation(folder['id'], folder['name'] ?? 'Untitled');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },
@@ -122,6 +142,33 @@ class _FoldersScreenState extends State<FoldersScreen> {
         onPressed: _showCreateFolderDialog,
         backgroundColor: const Color(0xFF0056D2),
         child: const Icon(Icons.create_new_folder, color: Colors.white),
+      ),
+    );
+  }
+
+  void _showDeleteFolderConfirmation(int id, String name) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete Folder", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Text("Are you sure you want to delete '$name'? The documents inside will NOT be deleted; they will move back to your Recent Scans."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await _apiService.deleteFolder(id);
+              if (success) {
+                _loadFolders();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Folder deleted")));
+                }
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

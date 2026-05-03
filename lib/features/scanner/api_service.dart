@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class ApiService {
-  final String baseUrl = "http://192.168.8.108:3000/api";
+  final String baseUrl = "http://127.0.0.1:3000/api";
 
   Future<bool> saveDocumentMetadata({
     required String title,
@@ -78,7 +78,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print("Error fetching documents: $e");
+      print("CONNECTION ERROR: Could not reach backend at $baseUrl. Details: $e");
       return [];
     }
   }
@@ -125,7 +125,20 @@ class ApiService {
     }
   }
 
-  // --- 5. DELETE DOCUMENT ---
+  // --- 5. DELETE FOLDER ---
+  Future<bool> deleteFolder(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/folders/$id'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error deleting folder: $e");
+      return false;
+    }
+  }
+
+  // --- 6. DELETE DOCUMENT ---
   Future<bool> deleteDocument(int id) async {
     try {
       final response = await http.delete(

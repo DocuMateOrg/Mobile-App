@@ -214,14 +214,28 @@ app.get('/api/folders/:userId', async (req, res) => {
             [userId]
         );
         
+        log(`📂 Sent ${result.rows.length} folders to user ${userId}`);
         res.status(200).json(result.rows);
     } catch (err) {
-        console.error("Database Folder Fetch Error:", err);
+        log(`Database Folder Fetch Error: ${err.message}`);
         res.status(500).json({ error: "Server error" });
     }
 });
 
-// --- 6. DELETE DOCUMENT ---
+// --- 6. DELETE FOLDER ---
+app.delete('/api/folders/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`DELETE FROM folders WHERE id = $1`, [id]);
+        log(`🗑️ Folder Delete attempt for ID ${id}. Rows affected: ${result.rowCount}`);
+        res.status(200).json({ message: "Folder deleted", count: result.rowCount });
+    } catch (err) {
+        log(`Database Folder Delete Error: ${err.message}`);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// --- 7. DELETE DOCUMENT ---
 app.delete('/api/documents/:id', async (req, res) => {
     try {
         const { id } = req.params;

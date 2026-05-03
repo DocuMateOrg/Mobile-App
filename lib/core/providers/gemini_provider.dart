@@ -43,12 +43,11 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
 
     state = await AsyncValue.guard(() async {
       final prompt = """
-Reorganize the following raw OCR text into a professional, structured document. 
+Analyze the following raw OCR text and extract the key information into a clear list of bullet points.
 Rules:
-1. Identify logical sections/topics.
-2. Format topics by centering them using decorative symbols (e.g., === TOPIC NAME ===).
-3. Under each topic, provide the content using clear bullet points.
-4. Correct any obvious OCR typos or misread characters while preserving the original information.
+1. Provide only a list of bullet points.
+2. Do not use headers, titles, or centered text.
+3. Fix any obvious OCR typos while preserving the original details.
 
 Raw OCR Text:
 $text

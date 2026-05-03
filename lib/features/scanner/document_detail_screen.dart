@@ -12,6 +12,7 @@ class DocumentDetailScreen extends ConsumerStatefulWidget {
   final int documentId;
   final String title;
   final String imagePath;
+  final String? serverImagePath;
   final String content;
 
   const DocumentDetailScreen({
@@ -19,6 +20,7 @@ class DocumentDetailScreen extends ConsumerStatefulWidget {
     required this.documentId,
     required this.title,
     required this.imagePath,
+    this.serverImagePath,
     required this.content,
   });
 
@@ -234,12 +236,23 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
               padding: const EdgeInsets.all(16),
               child: fileExists
                   ? Image.file(File(widget.imagePath), fit: BoxFit.contain)
-                  : Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
-                      ),
-                    ),
+                  : (widget.serverImagePath != null
+                      ? Image.network(
+                          "http://127.0.0.1:3000/${widget.serverImagePath!.replaceAll('\\', '/')}",
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                          ),
+                        )),
             ),
           ),
           
