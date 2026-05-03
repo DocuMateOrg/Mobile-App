@@ -39,6 +39,7 @@ dependencies:
   siri_wave: ^2.3.0
   open_filex: ^4.7.0
   path: ^1.9.1
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:

@@ -5,9 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class ApiService {
-  final String baseUrl = "http://localhost:3000/api";
+  final String baseUrl = "http://192.168.8.108:3000/api";
 
-  // --- 1. THE SAVE METHOD ---
   Future<bool> saveDocumentMetadata({
     required String title,
     required String extractedText,
@@ -40,7 +39,6 @@ class ApiService {
     }
   }
 
-  // --- 2. THE FETCH METHOD ---
   Future<List<dynamic>> fetchUserDocuments({int? folderId, String? searchQuery}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
