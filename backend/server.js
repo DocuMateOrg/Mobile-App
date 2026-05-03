@@ -2,14 +2,29 @@ require('dotenv').config();
 const express = require('express');
 const PDFDocument = require('pdfkit');
 const { Document, Packer, Paragraph, TextRun } = require('docx');
+const multer = require('multer');
+const path = require('path');
 const cors = require('cors');
-const { Pool } = require('pg'); // This is the PostgreSQL library
+const { Pool } = require('pg'); 
+
+// Configure Multer for image storage
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 
 // --- 1. CONNECT TO POSTGRESQL ---
 // These credentials come from the .env file
@@ -28,6 +43,12 @@ const log = (msg) => {
     fs.appendFileSync(logFile, entry);
     console.log(msg);
 };
+
+// Request Logger for debugging (Moved here to ensure 'log' is defined)
+app.use((req, res, next) => {
+    log(`DEBUG: ${req.method} request to ${req.url}`);
+    next();
+});
 
 // Prevent Node.js from crashing if the database connection drops unexpectedly
 pool.on('error', (err, client) => {
@@ -53,16 +74,21 @@ const initDB = async () => {
                 user_id VARCHAR(255) NOT NULL,
                 title VARCHAR(255) NOT NULL,
                 content TEXT,
-                local_image_path TEXT NOT NULL,
+                local_image_path TEXT,
+                server_image_path TEXT,
                 folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
-        // If documents table already existed without folder_id, add it safely
+        // Update schema safely
         await pool.query(`
             ALTER TABLE documents 
             ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL;
+        `);
+        await pool.query(`
+            ALTER TABLE documents 
+            ADD COLUMN IF NOT EXISTS server_image_path TEXT;
         `);
 
         log("✅ Database tables ready.");
@@ -72,22 +98,30 @@ const initDB = async () => {
 };
 initDB();
 
-// --- 2. THE SAVE ROUTE (Hits when you press Save) ---
-app.post('/api/documents', async (req, res) => {
+// --- 2. THE SAVE ROUTE (Updated for image upload) ---
+app.post('/api/documents', upload.single('image'), async (req, res) => {
     try {
-        let { userId, title, content, localImagePath, folderId } = req.body;
-        userId = userId?.trim();
+        log(`DEBUG: Save Request - Body keys: ${Object.keys(req.body || {})}, File: ${req.file ? req.file.filename : 'None'}`);
+        const body = req.body || {};
+        let { userId, title, content, localImagePath, folderId } = body;
+        const serverImagePath = req.file ? req.file.path : null;
         
+        userId = userId?.trim();
         if (!userId) return res.status(400).json({ error: "User ID required" });
+
+        // Provide defaults to prevent SQL NOT NULL errors
+        title = title || "Untitled Document";
+        content = content || "";
+        localImagePath = localImagePath || "";
         
         // Insert the data into PostgreSQL
         await pool.query(
-            `INSERT INTO documents (user_id, title, content, local_image_path, folder_id) 
-             VALUES ($1, $2, $3, $4, $5)`,
-            [userId, title, content, localImagePath, folderId || null]
+            `INSERT INTO documents (user_id, title, content, local_image_path, server_image_path, folder_id) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [userId, title, content, localImagePath, serverImagePath, folderId || null]
         );
         
-        log(`📥 Saved to DB: ${title} for user ${userId}`);
+        log(`📥 Saved to DB: ${title} for user ${userId} (Image: ${serverImagePath})`);
         res.status(201).json({ message: "Document saved successfully!" });
     } catch (err) {
         log(`Database Save Error: ${err.message}`);
@@ -257,9 +291,24 @@ app.get('/api/documents/:id/export', async (req, res) => {
             res.setHeader('Content-Disposition', `attachment; filename=${fileName}.pdf`);
 
             doc.pipe(res);
+            
+            // 1. Add Title
             doc.fontSize(20).text(docData.title, { align: 'center' });
             doc.moveDown();
-            doc.fontSize(12).text(docData.content);
+
+            // 2. Add Image if available
+            if (docData.server_image_path && fs.existsSync(docData.server_image_path)) {
+                log(`Adding image to PDF: ${docData.server_image_path}`);
+                doc.image(docData.server_image_path, {
+                    fit: [500, 600],
+                    align: 'center',
+                    valign: 'center'
+                });
+            } else {
+                log(`No image found for export: ${docData.server_image_path}`);
+                doc.fontSize(12).text("[Image not available]", { align: 'center' });
+            }
+
             doc.end();
 
         } else if (format === 'docx') {
@@ -303,6 +352,23 @@ app.get('/api/documents/:id/export', async (req, res) => {
 });
 
 // --- START SERVER ---
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 DocuMate Backend running at http://0.0.0.0:${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 DocuMate Backend running at http://localhost:${PORT}`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        log(`CRITICAL ERROR: Port ${PORT} is already in use. Please close the other process or use a different port.`);
+    } else {
+        log(`CRITICAL ERROR: Server failed to start: ${err.message}`);
+    }
+    process.exit(1);
+});
+
+// Catch silent crashes
+process.on('unhandledRejection', (reason, promise) => {
+    log(`CRITICAL ERROR: Unhandled Rejection at: ${promise}, reason: ${reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+    log(`CRITICAL ERROR: Uncaught Exception: ${err.message}\nStack: ${err.stack}`);
+    process.exit(1);
 });
