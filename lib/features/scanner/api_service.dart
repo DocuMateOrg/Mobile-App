@@ -5,7 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class ApiService {
-  final String baseUrl = "http://127.0.0.1:3000/api";
+  static const String baseHost = "http://192.168.8.101:3000";
+  static const String baseUrl = "$baseHost/api";
 
   Future<bool> saveDocumentMetadata({
     required String title,

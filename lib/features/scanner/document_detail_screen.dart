@@ -235,11 +235,11 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               child: fileExists
-                  ? Image.file(File(widget.imagePath), fit: BoxFit.contain)
-                  : (widget.serverImagePath != null
-                      ? Image.network(
-                          "http://127.0.0.1:3000/${widget.serverImagePath!.replaceAll('\\', '/')}",
-                          fit: BoxFit.contain,
+                    ? Image.file(File(widget.imagePath), fit: BoxFit.contain)
+                    : (widget.serverImagePath != null
+                        ? Image.network(
+                            "${ApiService.baseHost}/${widget.serverImagePath!.replaceAll('\\', '/')}",
+                            fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.grey[200],
                             child: const Center(

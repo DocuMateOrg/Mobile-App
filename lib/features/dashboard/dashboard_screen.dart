@@ -471,20 +471,18 @@ class DocumentCard extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        if (imagePath != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DocumentDetailScreen(
-                documentId: documentId,
-                title: title,
-                imagePath: imagePath ?? '',
-                serverImagePath: serverImagePath,
-                content: content,
-              ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DocumentDetailScreen(
+              documentId: documentId,
+              title: title,
+              imagePath: imagePath ?? '',
+              serverImagePath: serverImagePath,
+              content: content,
             ),
-          );
-        }
+          ),
+        );
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -517,7 +515,7 @@ class DocumentCard extends StatelessWidget {
                     ? Image.file(File(imagePath!), fit: BoxFit.cover)
                     : (serverImagePath != null 
                         ? Image.network(
-                            "http://127.0.0.1:3000/${serverImagePath!.replaceAll('\\', '/')}",
+                            "${ApiService.baseHost}/${serverImagePath!.replaceAll('\\', '/')}",
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => 
                               const Icon(Icons.broken_image, color: Colors.grey, size: 20),

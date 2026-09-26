@@ -93,7 +93,12 @@ const initDB = async () => {
 
         log("✅ Database tables ready.");
     } catch (err) {
-        log(`Database Init Error: ${err.message}`);
+        log(`Database Init Error: ${err.message || 'Connection failed'}`);
+        if (err.code === 'ECONNREFUSED') {
+            log(`ERROR: Could not connect to PostgreSQL at ${process.env.DB_HOST}:${process.env.DB_PORT}. Is the database running?`);
+        } else {
+            log(`Details: ${err.stack || err}`);
+        }
     }
 };
 initDB();
@@ -153,7 +158,7 @@ app.get('/api/documents/:userId', async (req, res) => {
         }
 
         if (search) {
-            // Split by space, keep words longer than 2 characters to filter out "the", "a", "is", etc.
+            
             const searchWords = search.split(/\s+/).filter(word => word.length > 2);
             
             if (searchWords.length > 0) {
@@ -186,7 +191,6 @@ app.get('/api/documents/:userId', async (req, res) => {
     }
 });
 
-// --- 4. CREATE FOLDER ---
 app.post('/api/folders', async (req, res) => {
     try {
         const { userId, name } = req.body;
@@ -204,7 +208,7 @@ app.post('/api/folders', async (req, res) => {
     }
 });
 
-// --- 5. FETCH FOLDERS ---
+
 app.get('/api/folders/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
@@ -222,7 +226,7 @@ app.get('/api/folders/:userId', async (req, res) => {
     }
 });
 
-// --- 6. DELETE FOLDER ---
+
 app.delete('/api/folders/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -235,7 +239,7 @@ app.delete('/api/folders/:id', async (req, res) => {
     }
 });
 
-// --- 7. DELETE DOCUMENT ---
+
 app.delete('/api/documents/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -247,7 +251,6 @@ app.delete('/api/documents/:id', async (req, res) => {
     }
 });
 
-// --- 7. UPDATE DOCUMENT (Rename or Move) ---
 app.put('/api/documents/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -265,7 +268,6 @@ app.put('/api/documents/:id', async (req, res) => {
         if (folderId !== undefined) {
             if (count > 1) query += ', ';
             query += `folder_id = $${count} `;
-            // Allow folderId to be null to move out of a folder
             values.push(folderId === null ? null : folderId);
             count++;
         }
@@ -285,11 +287,10 @@ app.put('/api/documents/:id', async (req, res) => {
     }
 });
 
-// --- 6. EXPORT ROUTE (Convert to PDF/Word) ---
 app.get('/api/documents/:id/export', async (req, res) => {
     try {
         const { id } = req.params;
-        const { format } = req.query; // 'pdf' or 'docx'
+        const { format } = req.query; 
 
         const result = await pool.query('SELECT * FROM documents WHERE id = $1', [id]);
         if (result.rows.length === 0) {
