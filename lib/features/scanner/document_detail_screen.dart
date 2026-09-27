@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 import '../../core/providers/gemini_provider.dart';
 import 'api_service.dart';
@@ -63,6 +64,44 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
   void dispose() {
     flutterTts.stop();
     super.dispose();
+  }
+
+  void _editImage() async {
+    final imagePathToEdit = widget.imagePath;
+    if (!File(imagePathToEdit).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Original image not found locally.')),
+      );
+      return;
+    }
+
+    final croppedFile = await ImageCropper().cropImage(
+      sourcePath: imagePathToEdit,
+      uiSettings: [
+        AndroidUiSettings(
+            toolbarTitle: 'Edit Document',
+            toolbarColor: const Color(0xFF0056D2),
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false),
+        IOSUiSettings(
+          title: 'Edit Document',
+        ),
+      ],
+    );
+
+    if (croppedFile != null) {
+      // Overwrite the local file with the cropped version
+      final croppedBytes = await File(croppedFile.path).readAsBytes();
+      await File(widget.imagePath).writeAsBytes(croppedBytes);
+      
+      if (mounted) {
+        setState(() {}); // Trigger a rebuild to show the cropped image
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image cropped successfully!')),
+        );
+      }
+    }
   }
 
   void _exportDocument(String format) async {
@@ -205,6 +244,10 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.crop),
+            onPressed: _editImage,
+          ),
           if (_isExporting)
             const Center(
               child: Padding(
@@ -235,7 +278,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               child: fileExists
-                    ? Image.file(File(widget.imagePath), fit: BoxFit.contain)
+                    ? Image.file(File(widget.imagePath), fit: BoxFit.contain, key: UniqueKey())
                     : (widget.serverImagePath != null
                         ? Image.network(
                             "${ApiService.baseHost}/${widget.serverImagePath!.replaceAll('\\', '/')}",

@@ -8,7 +8,8 @@ import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
-import 'package:documate/features/dashboard/edit_documents_list_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:documate/features/scanner/result_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -413,11 +414,17 @@ class QuickActionRow extends StatelessWidget {
       children: [
         _buildActionButton(Icons.document_scanner_outlined, "scan", const Color(0xFFC0FE72), const Color(0xFF88C928), () => context.push('/scan')),
         _buildActionButton(Icons.edit_outlined, "edit", const Color(0xFFFFDB99), const Color(0xFFD69A2D), () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const EditDocumentsListScreen()));
+          context.push('/folders');
         }),
         _buildActionButton(Icons.transform_outlined, "convert", const Color(0xFFC2D3FF), const Color(0xFF5A7ED2), () {}),
         _buildActionButton(Icons.folder_open_outlined, "folders", const Color(0xFFE4C1F9), const Color(0xFF9E5CBF), () => context.push('/folders')),
-        _buildActionButton(Icons.cloud_upload_outlined, "uploaded", const Color(0xFFFFB3B3), const Color(0xFFD9534F), () {}),
+        _buildActionButton(Icons.cloud_upload_outlined, "uploaded", const Color(0xFFFFB3B3), const Color(0xFFD9534F), () async {
+          final picker = ImagePicker();
+          final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+          if (image != null && context.mounted) {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => ResultScreen(imagePath: image.path)));
+          }
+        }),
       ],
     );
   }
