@@ -1,38 +1,9 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'asgardeo_auth_service.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AsgardeoAuthService _asgardeoAuthService = AsgardeoAuthService();
 
-  // Sign Up [cite: 4, 219]
-  Future<User?> signUp(String email, String password) async {
-    try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email, 
-        password: password
-      );
-      return result.user;
-    } catch (e) {
-      print("Signup Error: $e");
-      return null;
-    }
-  }
-
-  // Login [cite: 4, 219]
-  Future<User?> login(String email, String password) async {
-    try {
-      UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email, 
-        password: password
-      );
-      return result.user;
-    } catch (e) {
-      print("Login Error: $e");
-      return null;
-    }
-  }
-
-  // Logout [cite: 219]
-  Future<void> signOut() async {
-    await _auth.signOut();
+  Future<bool> loginWithHostedWeb() async {
+    return await _asgardeoAuthService.loginWithHostedWeb();
   }
 }

@@ -1,6 +1,5 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 // Import your screens (adjust paths if needed)
 import '../../features/scanner/result_screen.dart';
@@ -13,31 +12,23 @@ import '../../features/dashboard/folders_screen.dart';
 import '../../features/dashboard/folder_detail_screen.dart';
 import 'dart:async';
 
+import '../../services/user_session.dart';
+
 final router = GoRouter(
   initialLocation: '/dashboard',
   
-  // This "redirect" logic replaces the RootAuthWrapper
-  redirect: (context, state) {
-    final user = FirebaseAuth.instance.currentUser;
-    final isLoggedIn = user != null;
-    final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+  redirect: (context, state) async {
+    final isLoggedIn = await UserSession.isLoggedIn();
+    final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
 
-    // 1. If user is NOT logged in and tries to go somewhere else -> Force Login
-    if (!isLoggedIn && !isLoggingIn) {
+    if (!isLoggedIn && !isAuthRoute) {
       return '/login';
     }
-
-    // 2. If user IS logged in and tries to go to Login -> Send to Dashboard
-    if (isLoggedIn && isLoggingIn) {
+    if (isLoggedIn && isAuthRoute) {
       return '/dashboard';
     }
-
-    // 3. Otherwise, let them go where they want
-    return null; 
+    return null;
   },
-
-  // Refresh the router when Auth State changes (Auto-logout/login)
-  refreshListenable: GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
 
   routes: [
     GoRoute(

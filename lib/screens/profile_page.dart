@@ -1,32 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart'; // Import GoRouter
+import 'package:go_router/go_router.dart';
+import '../services/user_session.dart';
+import '../features/scanner/api_service.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
-  Future<void> _handleLogout(BuildContext context) async {
-    try {
-      // 1. Sign out from Firebase
-      await FirebaseAuth.instance.signOut(); 
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
 
-      // 2. That's it! 
-      // The 'refreshListenable' in router.dart will see the user is gone
-      // and automatically redirect them to '/login'.
-      
-    } catch (e) {
-      if (context.mounted) {
+class _ProfilePageState extends State<ProfilePage> {
+  String _userEmail = "Loading...";
+  String _userName = "User Name";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final savedEmail = await UserSession.getEmail();
+    final savedUsername = await UserSession.getUsername();
+
+    setState(() {
+      _userEmail = savedEmail ?? "No Email Found";
+      _userName = savedUsername ?? _userEmail.split('@')[0];
+    });
+  }
+
+  Future<void> _editUsernameDialog() async {
+    final controller = TextEditingController(text: _userName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Edit Username", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: "Enter your username",
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0056D2),
+            ),
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      await UserSession.updateUsername(newName);
+      await ApiService().updateUserProfile(email: _userEmail, username: newName);
+      setState(() {
+        _userName = newName;
+      });
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Logout failed: ${e.toString()}")),
+          const SnackBar(content: Text("Username updated successfully!")),
         );
       }
     }
   }
 
+  Future<void> _handleLogout(BuildContext context) async {
+    await UserSession.logout(context);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
     const primaryColor = Color(0xFF0056D2);
 
     return Scaffold(
@@ -36,7 +89,7 @@ class ProfilePage extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => context.pop(), // Use context.pop() for GoRouter back button
+          onPressed: () => context.pop(),
         ),
         title: Text(
           "Account",
@@ -48,7 +101,7 @@ class ProfilePage extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            
+
             // --- USER CARD SECTION ---
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -66,41 +119,52 @@ class ProfilePage extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 35,
-                        backgroundColor: primaryColor.withValues(alpha: 0.1),
-                        child: const Icon(Icons.person, size: 35, color: primaryColor),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: primaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                  GestureDetector(
+                    onTap: _editUsernameDialog,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 35,
+                          backgroundColor: primaryColor.withValues(alpha: 0.1),
+                          child: const Icon(Icons.person, size: 35, color: primaryColor),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 15),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          user?.displayName ?? "User Name",
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              _userName,
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit_note, size: 20, color: primaryColor),
+                              onPressed: _editUsernameDialog,
+                            ),
+                          ],
                         ),
                         Text(
-                          user?.email ?? "No Email Found",
+                          _userEmail,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             color: Colors.grey[600],

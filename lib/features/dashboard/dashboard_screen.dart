@@ -2,12 +2,14 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
 import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:documate/features/scanner/result_screen.dart';
+import 'package:documate/services/user_session.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,13 +23,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<dynamic>> _documentsFuture;
   
   String _searchQuery = '';
+  String _displayName = 'User';
   Timer? _debounce;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadDocuments();
+  }
+
+  Future<void> _loadUserData() async {
+    final savedName = await UserSession.getUsername();
+    final savedEmail = await UserSession.getEmail();
+
+    if (mounted) {
+      setState(() {
+        _displayName = savedName ?? savedEmail?.split('@')[0] ?? 'User';
+      });
+    }
   }
   
   @override
@@ -50,8 +65,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDocuments() async {
-    final user = FirebaseAuth.instance.currentUser;
-    print("DEBUG: Loading documents for user: ${user?.uid}");
+    _loadUserData();
+    final userId = await UserSession.getUserId();
+    print("DEBUG: Loading documents for user: $userId");
     
     final future = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
     setState(() {
@@ -67,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _handleLogout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
+    await UserSession.logout(context);
   }
 
   Widget _buildPlaceholderLine(double width) {
@@ -80,8 +96,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -159,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Hi, ${user?.email?.split('@')[0] ?? 'User'} 👋",
+                "Hi, $_displayName 👋",
                 style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 5),
@@ -367,11 +381,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(width: 10),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const ProfilePage()),
                           );
+                          _loadUserData();
                         },
                         child: const Padding(
                           padding: EdgeInsets.only(right: 8.0),
