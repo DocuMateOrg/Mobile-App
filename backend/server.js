@@ -32,14 +32,19 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 // --- 1. CONNECT TO POSTGRESQL ---
-// These credentials come from the .env file
-const pool = new Pool({
+// Connect via DATABASE_URL or individual DB environment variables
+const poolConfig = process.env.DATABASE_URL ? {
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+} : {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
-});
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+};
+const pool = new Pool(poolConfig);
 
 const fs = require('fs');
 const logFile = 'server.log';
