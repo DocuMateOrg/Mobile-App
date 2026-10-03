@@ -9,10 +9,7 @@ import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:documate/features/scanner/result_screen.dart';
-<<<<<<< HEAD
-=======
 import 'package:documate/services/user_session.dart';
->>>>>>> himansha
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
