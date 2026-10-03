@@ -1,12 +1,16 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:documate/services/user_session.dart';
 
 class ApiService {
-  static const String baseHost = "http://192.168.1.126:3000";
+  static const String baseHost = "http://192.168.8.108:3000";
   static const String baseUrl = "$baseHost/api";
+
+  Future<String?> _getUserId() async {
+    return await UserSession.getUserId();
+  }
 
   Future<bool> saveDocumentMetadata({
     required String title,
@@ -15,14 +19,14 @@ class ApiService {
     int? folderId,
   }) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return false;
+      final userId = await _getUserId();
+      if (userId == null) return false;
 
       final uri = Uri.parse('$baseUrl/documents');
       final request = http.MultipartRequest('POST', uri);
 
       // Add fields
-      request.fields['userId'] = user.uid;
+      request.fields['userId'] = userId;
       request.fields['title'] = title;
       request.fields['content'] = extractedText;
       request.fields['localImagePath'] = localImagePath;
@@ -38,7 +42,7 @@ class ApiService {
       request.files.add(file);
 
       // Add headers
-      request.headers['Authorization'] = 'Bearer ${user.uid}';
+      request.headers['Authorization'] = 'Bearer $userId';
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -52,10 +56,10 @@ class ApiService {
 
   Future<List<dynamic>> fetchUserDocuments({int? folderId, String? searchQuery}) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return [];
+      final userId = await _getUserId();
+      if (userId == null) return [];
 
-      String url = '$baseUrl/documents/${user.uid}';
+      String url = '$baseUrl/documents/$userId';
       
       List<String> queryParams = [];
       if (folderId != null) {
@@ -72,7 +76,6 @@ class ApiService {
       print("Fetching from: $url");
       final response = await http.get(Uri.parse(url));
       print("Status: ${response.statusCode}");
-      print("Body: ${response.body}");
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body); 
@@ -87,14 +90,14 @@ class ApiService {
   // --- 3. CREATE FOLDER ---
   Future<bool> createFolder(String name) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return false;
+      final userId = await _getUserId();
+      if (userId == null) return false;
       
       final response = await http.post(
         Uri.parse('$baseUrl/folders'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'userId': user.uid,
+          'userId': userId,
           'name': name,
         }),
       );
@@ -109,11 +112,11 @@ class ApiService {
   // --- 4. FETCH FOLDERS ---
   Future<List<dynamic>> fetchFolders() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return [];
+      final userId = await _getUserId();
+      if (userId == null) return [];
 
       final response = await http.get(
-        Uri.parse('$baseUrl/folders/${user.uid}'),
+        Uri.parse('$baseUrl/folders/$userId'),
       );
 
       if (response.statusCode == 200) {
@@ -132,6 +135,7 @@ class ApiService {
       final response = await http.delete(
         Uri.parse('$baseUrl/folders/$id'),
       );
+
       return response.statusCode == 200;
     } catch (e) {
       print("Error deleting folder: $e");
@@ -145,6 +149,7 @@ class ApiService {
       final response = await http.delete(
         Uri.parse('$baseUrl/documents/$id'),
       );
+
       return response.statusCode == 200;
     } catch (e) {
       print("Error deleting document: $e");
@@ -152,17 +157,23 @@ class ApiService {
     }
   }
 
-  // --- 6. UPDATE DOCUMENT ---
-  Future<bool> updateDocument(int id, {String? title, int? folderId}) async {
+  // --- 7. UPDATE DOCUMENT (Title & Folder Assignment) ---
+  Future<bool> updateDocument(
+    int id, {
+    String? title,
+    int? folderId,
+  }) async {
     try {
+      final Map<String, dynamic> body = {};
+      if (title != null) body['title'] = title;
+      if (folderId != null) body['folderId'] = folderId;
+
       final response = await http.put(
         Uri.parse('$baseUrl/documents/$id'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          if (title != null) 'title': title,
-          'folderId': folderId, // Can be null to remove from folder
-        }),
+        body: jsonEncode(body),
       );
+
       return response.statusCode == 200;
     } catch (e) {
       print("Error updating document: $e");
@@ -170,27 +181,84 @@ class ApiService {
     }
   }
 
-  // --- 5. EXPORT DOCUMENT ---
+  // --- 8. EXPORT & DOWNLOAD DOCUMENT (PDF / DOCX) ---
+  String getExportUrl(int id, String format) {
+    return '$baseUrl/documents/$id/export?format=$format';
+  }
+
   Future<String?> downloadExportedFile(int id, String format) async {
     try {
-      final url = '$baseUrl/documents/$id/export?format=$format';
-      print("DEBUG: Export URL: $url");
+      final url = getExportUrl(id, format);
       final response = await http.get(Uri.parse(url));
-      print("DEBUG: Export Response Status: ${response.statusCode}");
-
       if (response.statusCode == 200) {
-        final directory = await getApplicationDocumentsDirectory();
-        final fileName = "Exported_Doc_${id}_${DateTime.now().millisecondsSinceEpoch}.$format";
-        final filePath = "${directory.path}/$fileName";
-        
-        final file = File(filePath);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/export_$id.$format');
         await file.writeAsBytes(response.bodyBytes);
-        return filePath;
+        return file.path;
       }
       return null;
     } catch (e) {
-      print("Export Error: $e");
+      print("Error downloading export: $e");
       return null;
+    }
+  }
+
+  // --- 9. USER MANAGEMENT APIS ---
+  Future<Map<String, dynamic>> checkUserExists(String email) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/check?email=${Uri.encodeComponent(email)}');
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {"exists": false, "user": null};
+    } catch (e) {
+      print("Error checking user existence: $e");
+      return {"exists": false, "user": null};
+    }
+  }
+
+  Future<bool> registerUser({
+    required String email,
+    required String username,
+    String? authProvider,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/register');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'username': username,
+          'authProvider': authProvider ?? 'email',
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error registering user in DB: $e");
+      return false;
+    }
+  }
+
+  Future<bool> updateUserProfile({
+    required String email,
+    required String username,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/profile');
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'username': username,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error updating user profile in DB: $e");
+      return false;
     }
   }
 }

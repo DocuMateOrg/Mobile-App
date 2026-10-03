@@ -10,9 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^4.4.0
-  firebase_auth: ^6.1.2
-  firebase_storage: ^13.3.0
+  flutter_appauth: ^6.0.0
   http: ^1.2.0
   # UI & Design
   google_fonts: ^8.1.0        
@@ -41,6 +39,7 @@ dependencies:
   path: ^1.9.1
   flutter_tts: ^4.2.5
   flutter_dotenv: ^6.0.1
+  google_sign_in: ^6.2.1
 
 dev_dependencies:
   flutter_test:

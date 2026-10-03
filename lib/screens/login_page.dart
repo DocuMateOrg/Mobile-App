@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
+import '../services/asgardeo_auth_service.dart';
+import '../services/user_session.dart';
 import 'signup_page.dart';
-import '../features/dashboard/dashboard_screen.dart';
-
+import 'forgot_password_page.dart';
+import '../features/scanner/api_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,34 +16,100 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final AsgardeoAuthService _asgardeoAuthService = AsgardeoAuthService();
+  final ApiService _apiService = ApiService();
+
   bool _isPasswordVisible = false;
   bool _rememberMe = false;
+  bool _isLoading = false;
 
   Future<void> _signIn() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final usernameOrEmail = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (usernameOrEmail.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill in all fields")),
       );
       return;
     }
 
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      
-      if (!context.mounted) return;
+    setState(() => _isLoading = true);
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!context.mounted) return;
+    final result = await _asgardeoAuthService.manualLogin(
+      username: usernameOrEmail,
+      password: password,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result["success"] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? "Authentication failed")),
+        const SnackBar(content: Text("Logged in successfully!")),
       );
+      context.go('/dashboard');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result["message"] ?? "Authentication failed")),
+      );
+    }
+  }
+
+  Future<void> _loginWithSocial(String providerName) async {
+    setState(() => _isLoading = true);
+    if (providerName == 'Google') {
+      final googleDetails = await _asgardeoAuthService.getGoogleAccountDetails();
+      setState(() => _isLoading = false);
+
+      if (googleDetails == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Google account selection cancelled.")),
+          );
+        }
+        return;
+      }
+
+      final googleEmail = googleDetails['email'] ?? '';
+      final googleName = googleEmail.contains('@') ? googleEmail.split('@')[0] : (googleDetails['name'] ?? 'user');
+
+      final checkResult = await _apiService.checkUserExists(googleEmail);
+
+      if (!mounted) return;
+
+      if (checkResult['exists'] == true) {
+        final username = checkResult['user']?['username'] ?? googleName;
+        await UserSession.saveUser(email: googleEmail, username: username);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Welcome back, $username!")),
+        );
+        context.go('/dashboard');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No account found for $googleEmail. Redirecting to signup...")),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SignupPage(
+              initialEmail: googleEmail,
+              initialUsername: googleName,
+            ),
+          ),
+        );
+      }
+    } else {
+      final success = await _asgardeoAuthService.loginWithSocialProvider(providerName);
+      setState(() => _isLoading = false);
+      if (success && mounted) {
+        context.go('/dashboard');
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to sign in with $providerName")),
+        );
+      }
     }
   }
 
@@ -64,11 +132,12 @@ class _LoginPageState extends State<LoginPage> {
                 style: TextStyle(fontSize: 16, color: Colors.black54)),
               const SizedBox(height: 40),
               
-              const Text("Email", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text("Email or Username", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(
+                  hintText: "Enter your email or username",
                   prefixIcon: const Icon(Icons.email_outlined),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -100,7 +169,13 @@ class _LoginPageState extends State<LoginPage> {
                       const Text("Remember me"),
                     ],
                   ),
-                  const Text("Forgot password", style: TextStyle(fontWeight: FontWeight.bold)),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ForgotPasswordPage()),
+                    ),
+                    child: const Text("Forgot password", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
                 ],
               ),
               const SizedBox(height: 30),
@@ -109,12 +184,14 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: _signIn,
+                  onPressed: _isLoading ? null : _signIn,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0056D2),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
-                  child: const Text("Sign in", style: TextStyle(color: Colors.white, fontSize: 18)),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("Sign in", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 25),
@@ -143,21 +220,44 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 30),
               
-              // Styled Google Button using Icon to prevent "Invalid image data" error
-              Container(
-                width: double.infinity,
-                height: 55,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.grey.shade300),
+              // Social Logins (Google & GitHub)
+              GestureDetector(
+                onTap: _isLoading ? null : () => _loginWithSocial('Google'),
+                child: Container(
+                  width: double.infinity,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
+                      SizedBox(width: 10),
+                      Text("Sign In With Google", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
-                    SizedBox(width: 10),
-                    Text("Sign In With Google"),
-                  ],
+              ),
+              const SizedBox(height: 15),
+              GestureDetector(
+                onTap: _isLoading ? null : () => _loginWithSocial('GitHub'),
+                child: Container(
+                  width: double.infinity,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.code, color: Colors.black, size: 24),
+                      SizedBox(width: 10),
+                      Text("Sign In With GitHub", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
               ),
             ],

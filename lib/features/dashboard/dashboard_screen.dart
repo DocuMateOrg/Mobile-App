@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:documate/screens/profile_page.dart';
 import 'package:documate/screens/voice_search_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,10 @@ import 'package:documate/features/scanner/api_service.dart';
 import 'package:documate/features/scanner/document_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:documate/features/scanner/result_screen.dart';
+<<<<<<< HEAD
+=======
+import 'package:documate/services/user_session.dart';
+>>>>>>> himansha
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,13 +26,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<List<dynamic>> _documentsFuture;
   
   String _searchQuery = '';
+  String _displayName = 'User';
   Timer? _debounce;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadDocuments();
+  }
+
+  Future<void> _loadUserData() async {
+    final savedEmail = await UserSession.getEmail();
+    final savedName = await UserSession.getUsername();
+
+    if (savedEmail != null && savedEmail.contains('@')) {
+      try {
+        final checkResult = await ApiService().checkUserExists(savedEmail);
+        if (checkResult['exists'] == true && checkResult['user'] != null) {
+          final String? dbUsername = checkResult['user']?['username'];
+          if (dbUsername != null && dbUsername.isNotEmpty) {
+            await UserSession.updateUsername(dbUsername);
+            if (mounted) {
+              setState(() {
+                _displayName = dbUsername;
+              });
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("Error loading user profile in dashboard: $e");
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _displayName = savedName ?? (savedEmail?.contains('@') == true ? savedEmail!.split('@')[0] : 'User');
+      });
+    }
   }
   
   @override
@@ -52,8 +88,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDocuments() async {
-    final user = FirebaseAuth.instance.currentUser;
-    print("DEBUG: Loading documents for user: ${user?.uid}");
+    _loadUserData();
+    final userId = await UserSession.getUserId();
+    print("DEBUG: Loading documents for user: $userId");
     
     final future = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
     setState(() {
@@ -69,7 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _handleLogout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
+    await UserSession.logout(context);
   }
 
   Widget _buildPlaceholderLine(double width) {
@@ -82,8 +119,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -161,7 +196,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Hi, ${user?.email?.split('@')[0] ?? 'User'} 👋",
+                "Hi, $_displayName 👋",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 5),
@@ -171,7 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 15),
 
-              const QuickActionRow(),
+              QuickActionRow(onRefresh: _loadDocuments),
               
               const SizedBox(height: 30),
               
@@ -369,11 +406,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(width: 10),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const ProfilePage()),
                           );
+                          _loadUserData();
                         },
                         child: const Padding(
                           padding: EdgeInsets.only(right: 8.0),
@@ -405,26 +443,139 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class QuickActionRow extends StatelessWidget {
-  const QuickActionRow({super.key});
+  final VoidCallback? onRefresh;
+  const QuickActionRow({super.key, this.onRefresh});
+
+  Future<void> _handleUpload(BuildContext context) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+      );
+
+      if (image != null && context.mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultScreen(imagePath: image.path),
+          ),
+        );
+        if (onRefresh != null) {
+          onRefresh!();
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error uploading document image: $e")),
+        );
+      }
+    }
+  }
+
+  void _showConvertDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Convert Document Format",
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Pick an image to extract text and convert to PDF or Word:",
+              style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
+              title: Text("Convert to PDF", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              subtitle: Text("Extract text & save as PDF document", style: GoogleFonts.poppins(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _handleUpload(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.description, color: Colors.blue, size: 28),
+              title: Text("Convert to Word (.docx)", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              subtitle: Text("Extract text & save as editable Word document", style: GoogleFonts.poppins(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _handleUpload(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildActionButton(Icons.document_scanner_outlined, "scan", const Color(0xFFC0FE72), const Color(0xFF88C928), () => context.push('/scan')),
-        _buildActionButton(Icons.edit_outlined, "edit", const Color(0xFFFFDB99), const Color(0xFFD69A2D), () {
-          context.push('/folders');
-        }),
-        _buildActionButton(Icons.transform_outlined, "convert", const Color(0xFFC2D3FF), const Color(0xFF5A7ED2), () {}),
-        _buildActionButton(Icons.folder_open_outlined, "folders", const Color(0xFFE4C1F9), const Color(0xFF9E5CBF), () => context.push('/folders')),
-        _buildActionButton(Icons.cloud_upload_outlined, "uploaded", const Color(0xFFFFB3B3), const Color(0xFFD9534F), () async {
-          final picker = ImagePicker();
-          final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-          if (image != null && context.mounted) {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => ResultScreen(imagePath: image.path)));
-          }
-        }),
+        _buildActionButton(
+          Icons.document_scanner_outlined,
+          "scan",
+          const Color(0xFFC0FE72),
+          const Color(0xFF88C928),
+          () async {
+            final result = await context.push('/scan');
+            if (result == true && onRefresh != null) {
+              onRefresh!();
+            }
+          },
+        ),
+        _buildActionButton(
+          Icons.edit_outlined,
+          "edit",
+          const Color(0xFFFFDB99),
+          const Color(0xFFD69A2D),
+          () async {
+            await context.push('/folders');
+            if (onRefresh != null) {
+              onRefresh!();
+            }
+          },
+        ),
+        _buildActionButton(
+          Icons.transform_outlined,
+          "convert",
+          const Color(0xFFC2D3FF),
+          const Color(0xFF5A7ED2),
+          () => _showConvertDialog(context),
+        ),
+        _buildActionButton(
+          Icons.folder_open_outlined,
+          "folders",
+          const Color(0xFFE4C1F9),
+          const Color(0xFF9E5CBF),
+          () async {
+            await context.push('/folders');
+            if (onRefresh != null) {
+              onRefresh!();
+            }
+          },
+        ),
+        _buildActionButton(
+          Icons.cloud_upload_outlined,
+          "uploaded",
+          const Color(0xFFFFB3B3),
+          const Color(0xFFD9534F),
+          () => _handleUpload(context),
+        ),
       ],
     );
   }
