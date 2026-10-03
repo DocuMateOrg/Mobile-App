@@ -49,6 +49,13 @@ class AsgardeoAuthService {
         }),
       );
 
+      if (response.body.trim().startsWith("<") || response.statusCode == 404) {
+        return {
+          "success": false,
+          "message": "Cannot reach backend API (${ApiService.baseUrl}). Returned HTML response. Check backend server and IP configuration."
+        };
+      }
+
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
         accessToken = data['data']?['access_token'] ?? data['data']?['authData']?['accessToken'];
@@ -124,6 +131,13 @@ class AsgardeoAuthService {
           "lastName": lastName ?? "User",
         }),
       );
+
+      if (response.body.trim().startsWith("<") || response.statusCode == 404) {
+        return {
+          "success": false,
+          "message": "Server error (${response.statusCode}): Returned HTML instead of JSON. Check backend server URL (${ApiService.baseUrl}) and IP settings."
+        };
+      }
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
