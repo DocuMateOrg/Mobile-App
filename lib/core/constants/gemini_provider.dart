@@ -8,7 +8,7 @@ class OcrResult {
 
 // 1. Create a provider for the API Key
 final geminiApiKeyProvider = Provider<String>((ref) {
-  return const String.fromEnvironment('API_KEY', defaultValue: 'AIzaSyCkjm20_c5P8K-Y3TCVoddy7FQ9NdfZSyk');
+  return const String.fromEnvironment('API_KEY', defaultValue: 'AIzaSyA0NzBJLFMAXyvurdGmPySRNpMQMvfgxkk');
 });
 
 // 2. Create the provider for the Generative Model
@@ -20,7 +20,7 @@ final geminiModelProvider = Provider<GenerativeModel>((ref) {
   }
   
   return GenerativeModel(
-    model: 'gemini-2.5-flash', 
+    model: 'gemini-3.8-flash', 
     apiKey: apiKey,
   );
 });
@@ -38,11 +38,31 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
   Future<void> summarizeText(String text) async {
     if (text.isEmpty) return;
     state = const AsyncValue.loading();
-    final model = ref.read(geminiModelProvider);
+    final apiKey = ref.read(geminiApiKeyProvider);
+
     state = await AsyncValue.guard(() async {
       final prompt = "Summarize the following text in 3 concise bullet points:\n\n$text";
-      final response = await model.generateContent([Content.text(prompt)]);
-      return OcrResult(summary: response.text ?? "No summary generated.");
+      final candidateModels = [
+        'gemini-3.8-flash',
+        'gemini-3.6-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash'
+      ];
+
+      Object? lastError;
+      for (final modelName in candidateModels) {
+        try {
+          final model = GenerativeModel(model: modelName, apiKey: apiKey);
+          final response = await model.generateContent([Content.text(prompt)]);
+          if (response.text != null && response.text!.isNotEmpty) {
+            return OcrResult(summary: response.text!);
+          }
+        } catch (e) {
+          lastError = e;
+        }
+      }
+
+      return OcrResult(summary: "No summary generated ($lastError).");
     });
   }
 }

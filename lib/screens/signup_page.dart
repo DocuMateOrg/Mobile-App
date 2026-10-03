@@ -56,7 +56,7 @@ class _SignupPageState extends State<SignupPage> {
       }
 
       final googleEmail = googleDetails['email'] ?? '';
-      final googleName = googleDetails['name'] ?? googleEmail.split('@')[0];
+      final googleName = googleEmail.contains('@') ? googleEmail.split('@')[0] : (googleDetails['name'] ?? 'user');
 
       final checkResult = await _apiService.checkUserExists(googleEmail);
 
@@ -169,10 +169,12 @@ class _SignupPageState extends State<SignupPage> {
               const SizedBox(height: 8),
               TextField(
                 controller: _usernameController,
+                maxLength: 16,
                 decoration: InputDecoration(
-                  hintText: "Enter your username",
+                  hintText: "Enter your username (max 16 chars)",
                   prefixIcon: const Icon(Icons.person_outline),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  counterText: "",
                 ),
               ),
               const SizedBox(height: 20),

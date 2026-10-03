@@ -73,7 +73,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       final googleEmail = googleDetails['email'] ?? '';
-      final googleName = googleDetails['name'] ?? googleEmail.split('@')[0];
+      final googleName = googleEmail.contains('@') ? googleEmail.split('@')[0] : (googleDetails['name'] ?? 'user');
 
       final checkResult = await _apiService.checkUserExists(googleEmail);
 

@@ -8,7 +8,7 @@ class OcrResult {
 
 // API Key Provider
 final geminiApiKeyProvider = Provider<String>((ref) {
-  return const String.fromEnvironment('API_KEY', defaultValue: 'AIzaSyCkjm20_c5P8K-Y3TCVoddy7FQ9NdfZSyk');
+  return const String.fromEnvironment('API_KEY', defaultValue: 'AIzaSyA0NzBJLFMAXyvurdGmPySRNpMQMvfgxkk');
 });
 
 // Model Provider
@@ -18,7 +18,7 @@ final geminiModelProvider = Provider<GenerativeModel>((ref) {
     throw Exception('API_KEY not found. Run with --dart-define=API_KEY=your_key');
   }
   return GenerativeModel(
-    model: 'gemini-2.5-flash', 
+    model: 'gemini-3.8-flash', 
     apiKey: apiKey,
   );
 });
@@ -39,7 +39,7 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
     }
 
     state = const AsyncValue.loading();
-    final model = ref.read(geminiModelProvider);
+    final apiKey = ref.read(geminiApiKeyProvider);
 
     state = await AsyncValue.guard(() async {
       final prompt = """
@@ -52,13 +52,28 @@ Rules:
 Raw OCR Text:
 $text
 """;
-      final response = await model.generateContent([Content.text(prompt)]);
-      
-      if (response.text == null || response.text!.isEmpty) {
-        throw Exception("Gemini returned an empty response.");
+
+      final candidateModels = [
+        'gemini-3.8-flash',
+        'gemini-3.6-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash'
+      ];
+
+      Object? lastError;
+      for (final modelName in candidateModels) {
+        try {
+          final model = GenerativeModel(model: modelName, apiKey: apiKey);
+          final response = await model.generateContent([Content.text(prompt)]);
+          if (response.text != null && response.text!.isNotEmpty) {
+            return OcrResult(summary: response.text!);
+          }
+        } catch (e) {
+          lastError = e;
+        }
       }
-      
-      return OcrResult(summary: response.text!);
+
+      throw Exception("All Gemini models failed: $lastError");
     });
   }
 }

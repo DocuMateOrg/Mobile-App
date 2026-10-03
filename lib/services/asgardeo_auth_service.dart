@@ -55,17 +55,12 @@ class AsgardeoAuthService {
         idToken = data['data']?['id_token'] ?? data['data']?['authData']?['idToken'];
 
         final userObj = data['user'];
-        final String userEmail = userObj?['email'] ?? username;
-        final String userName = userObj?['username'] ?? (username.contains('@') ? username.split('@')[0] : username);
+        final String userEmail = (userObj?['email'] != null && userObj['email'].toString().contains('@'))
+            ? userObj['email']
+            : (username.contains('@') ? username : '$username@documate.com');
+        final String userName = userObj?['username'] ?? data['username'] ?? (userEmail.contains('@') ? userEmail.split('@')[0] : username);
 
-        if (idToken != null) {
-          final claims = parseJwt(idToken!);
-          final email = (claims?['email'] ?? claims?['sub'] ?? userEmail).toString();
-          final user = (claims?['username'] ?? claims?['preferred_username'] ?? userName).toString();
-          await UserSession.saveUser(email: email, username: user);
-        } else {
-          await UserSession.saveUser(email: userEmail, username: userName);
-        }
+        await UserSession.saveUser(email: userEmail, username: userName);
 
         return {"success": true, "message": "Login successful"};
       }
@@ -154,10 +149,10 @@ class AsgardeoAuthService {
         accessToken = googleAuth.accessToken;
         idToken = googleAuth.idToken;
 
-        // Save user email & display name into session
+        // Save user email & username (prefix before @ for social login) into session
         await UserSession.saveUser(
           email: googleUser.email,
-          username: googleUser.displayName ?? googleUser.email.split('@')[0],
+          username: googleUser.email.split('@')[0],
         );
 
         debugPrint("=== NATIVE GOOGLE LOGIN SUCCESSFUL ===");
@@ -243,10 +238,10 @@ class AsgardeoAuthService {
         if (idToken != null) {
           final claims = parseJwt(idToken!);
           if (claims != null) {
-            final email = (claims['email'] ?? claims['sub'] ?? '').toString();
-            final username = (claims['username'] ?? claims['preferred_username'] ?? claims['given_name'] ?? (email.contains('@') ? email.split('@')[0] : 'User')).toString();
-            if (email.isNotEmpty) {
-              await UserSession.saveUser(email: email, username: username);
+            final String? rawEmail = claims['email']?.toString();
+            if (rawEmail != null && rawEmail.contains('@')) {
+              final username = (claims['username'] ?? claims['preferred_username'] ?? claims['given_name'] ?? rawEmail.split('@')[0]).toString();
+              await UserSession.saveUser(email: rawEmail, username: username);
             }
           }
         }
@@ -292,10 +287,10 @@ class AsgardeoAuthService {
         if (idToken != null) {
           final claims = parseJwt(idToken!);
           if (claims != null) {
-            final email = (claims['email'] ?? claims['sub'] ?? '').toString();
-            final username = (claims['username'] ?? claims['preferred_username'] ?? claims['given_name'] ?? (email.contains('@') ? email.split('@')[0] : 'User')).toString();
-            if (email.isNotEmpty) {
-              await UserSession.saveUser(email: email, username: username);
+            final String? rawEmail = claims['email']?.toString();
+            if (rawEmail != null && rawEmail.contains('@')) {
+              final username = (claims['username'] ?? claims['preferred_username'] ?? claims['given_name'] ?? rawEmail.split('@')[0]).toString();
+              await UserSession.saveUser(email: rawEmail, username: username);
             }
           }
         }

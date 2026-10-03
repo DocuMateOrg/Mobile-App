@@ -107,6 +107,13 @@ const initDB = async () => {
             ADD COLUMN IF NOT EXISTS server_image_path TEXT;
         `);
 
+        // Cleanup any legacy sub GUID usernames from previous test logins
+        await pool.query(`
+            UPDATE users 
+            SET username = SPLIT_PART(email, '@', 1) 
+            WHERE email LIKE '%@%' AND (LENGTH(username) > 16 OR username LIKE '%-%');
+        `);
+
         log("✅ Database tables ready.");
     } catch (err) {
         log(`Database Init Error: ${err.message || 'Connection failed'}`);
@@ -221,6 +228,35 @@ app.post('/api/auth/login', async (req, res) => {
 
     const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
+// Helper to safely fetch or register user during login without overwriting existing custom username
+const getOrSaveUserOnLogin = async (email, suggestedUsername) => {
+    const cleanedEmail = email.trim().toLowerCase();
+    
+    // 1. Check if user already exists in DB
+    const existingRes = await pool.query(`SELECT * FROM users WHERE LOWER(email) = $1`, [cleanedEmail]);
+    if (existingRes.rows.length > 0) {
+        log(`👤 Existing user logged in: ${cleanedEmail} (Username: "${existingRes.rows[0].username}")`);
+        return existingRes.rows[0];
+    }
+    
+    // 2. New user: determine default username
+    let defaultUsername = cleanedEmail.split('@')[0];
+    if (suggestedUsername && suggestedUsername.length <= 16 && !suggestedUsername.includes('-')) {
+        defaultUsername = suggestedUsername.trim();
+    }
+    
+    const insertRes = await pool.query(
+        `INSERT INTO users (email, username, auth_provider)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+         RETURNING *`,
+        [cleanedEmail, defaultUsername, 'email']
+    );
+    
+    log(`👤 New user created on login: ${cleanedEmail} (Username: "${insertRes.rows[0].username}")`);
+    return insertRes.rows[0];
+};
+
     // 0. Resource Owner Password Credentials Grant (Direct OAuth2 Password Authentication)
     for (const uname of [email, `DEFAULT/${email}`]) {
       try {
@@ -245,18 +281,28 @@ app.post('/api/auth/login', async (req, res) => {
         if (pwdTokenRes.data?.access_token) {
           log(`🔓 Asgardeo Password Grant authentication successful: ${email}`);
 
-          await pool.query(
-            `INSERT INTO users (email, username, auth_provider)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username`,
-            [email, email.split('@')[0], 'email']
-          ).catch(() => {});
+          const tokens = pwdTokenRes.data;
+          let extractedUsername = email.split('@')[0];
+
+          if (tokens?.id_token) {
+            try {
+              const payloadBase64 = tokens.id_token.split('.')[1];
+              const decodedPayload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+              extractedUsername = decodedPayload.given_name || decodedPayload.preferred_username || decodedPayload.name || email.split('@')[0];
+            } catch (err) {
+              console.error("Failed to parse id_token:", err.message);
+            }
+          }
+
+          const dbUser = await getOrSaveUserOnLogin(email, extractedUsername);
 
           return res.json({
             success: true,
             message: "Login successful",
-            data: pwdTokenRes.data,
-            user: { email: email, username: email }
+            username: dbUser.username,
+            ...tokens,
+            data: tokens,
+            user: { email: dbUser.email, username: dbUser.username }
           });
         }
       } catch (pwdErr) {
@@ -339,18 +385,29 @@ app.post('/api/auth/login', async (req, res) => {
 
                     log(`🔓 Asgardeo password authentication successful: ${email}`);
 
-                    await pool.query(
-                      `INSERT INTO users (email, username, auth_provider)
-                       VALUES ($1, $2, $3)
-                       ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username`,
-                      [email, email.split('@')[0], 'email']
-                    ).catch(() => {});
+                    // 4. DECODE THE ID TOKEN TO GET THE USER PROFILE
+                    const tokens = tokenRes.data;
+                    let extractedUsername = email.split('@')[0];
+
+                    if (tokens?.id_token) {
+                      try {
+                        const payloadBase64 = tokens.id_token.split('.')[1];
+                        const decodedPayload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+                        extractedUsername = decodedPayload.given_name || decodedPayload.preferred_username || decodedPayload.name || email.split('@')[0];
+                      } catch (err) {
+                        console.error("Failed to parse id_token:", err.message);
+                      }
+                    }
+
+                    const dbUser = await getOrSaveUserOnLogin(email, extractedUsername);
 
                     return res.json({
                       success: true,
                       message: "Login successful",
-                      data: tokenRes.data,
-                      user: { email: email, username: email }
+                      username: dbUser.username,
+                      ...tokens,
+                      data: tokens,
+                      user: { email: dbUser.email, username: dbUser.username }
                     });
                   }
                 } catch (authErr) {
@@ -385,18 +442,14 @@ app.post('/api/auth/login', async (req, res) => {
         if (authnRes.status === 200 && (authnRes.data?.status === 'SUCCESS' || authnRes.data?.authData)) {
           log(`🔓 Asgardeo /oauth2/authn password authentication successful: ${email}`);
 
-          await pool.query(
-            `INSERT INTO users (email, username, auth_provider)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username`,
-            [email, email.split('@')[0], 'email']
-          ).catch(() => {});
+          const dbUser = await getOrSaveUserOnLogin(email, email.split('@')[0]);
 
           return res.json({
             success: true,
             message: "Login successful",
+            username: dbUser.username,
             data: authnRes.data,
-            user: { email: email, username: email }
+            user: { email: dbUser.email, username: dbUser.username }
           });
         }
       } catch (authnErr) {

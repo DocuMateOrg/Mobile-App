@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:documate/services/user_session.dart';
 
 class ApiService {
-  static const String baseHost = "http://10.0.2.2:3000";
+  static const String baseHost = "http://192.168.8.108:3000";
   static const String baseUrl = "$baseHost/api";
 
   Future<String?> _getUserId() async {

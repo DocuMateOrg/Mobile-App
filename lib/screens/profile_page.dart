@@ -25,10 +25,36 @@ class _ProfilePageState extends State<ProfilePage> {
     final savedEmail = await UserSession.getEmail();
     final savedUsername = await UserSession.getUsername();
 
-    setState(() {
-      _userEmail = savedEmail ?? "No Email Found";
-      _userName = savedUsername ?? _userEmail.split('@')[0];
-    });
+    if (savedEmail != null && savedEmail.contains('@')) {
+      try {
+        final checkResult = await ApiService().checkUserExists(savedEmail);
+        if (checkResult['exists'] == true && checkResult['user'] != null) {
+          final dbUser = checkResult['user'];
+          final String? dbUsername = dbUser['username'];
+          if (dbUsername != null && dbUsername.isNotEmpty) {
+            await UserSession.updateUsername(dbUsername);
+            if (mounted) {
+              setState(() {
+                _userEmail = savedEmail;
+                _userName = dbUsername;
+              });
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("Error syncing profile with DB: $e");
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _userEmail = (savedEmail != null && savedEmail.contains('@')) ? savedEmail : "No Email Found";
+        _userName = (savedUsername != null && savedUsername.isNotEmpty)
+            ? savedUsername
+            : (_userEmail.contains('@') ? _userEmail.split('@')[0] : "User");
+      });
+    }
   }
 
   Future<void> _editUsernameDialog() async {
@@ -39,9 +65,11 @@ class _ProfilePageState extends State<ProfilePage> {
         title: Text("Edit Username", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
+          maxLength: 16,
           decoration: InputDecoration(
-            hintText: "Enter your username",
+            hintText: "Enter your username (max 16 chars)",
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            counterText: "",
           ),
         ),
         actions: [
@@ -61,10 +89,11 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     if (newName != null && newName.isNotEmpty) {
-      await UserSession.updateUsername(newName);
-      await ApiService().updateUserProfile(email: _userEmail, username: newName);
+      final sanitizedName = newName.length > 16 ? newName.substring(0, 16) : newName;
+      await UserSession.updateUsername(sanitizedName);
+      await ApiService().updateUserProfile(email: _userEmail, username: sanitizedName);
       setState(() {
-        _userName = newName;
+        _userName = sanitizedName;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -150,11 +179,15 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              _userName,
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                _userName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             IconButton(
@@ -165,6 +198,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         Text(
                           _userEmail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             color: Colors.grey[600],
