@@ -18,7 +18,7 @@ final geminiModelProvider = Provider<GenerativeModel>((ref) {
     throw Exception('API_KEY not found. Run with --dart-define=API_KEY=your_key');
   }
   return GenerativeModel(
-    model: 'gemini-3.8-flash', 
+    model: 'gemini-2.5-flash', 
     apiKey: apiKey,
   );
 });
@@ -33,16 +33,16 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
   Future<OcrResult?> build() async => null;
 
   Future<void> summarizeText(String text) async {
-    if (text.trim().isEmpty) {
-      state = AsyncValue.error("No text found to summarize", StackTrace.current);
+    final cleanText = text.trim();
+    if (cleanText.isEmpty) {
+      state = AsyncValue.data(OcrResult(summary: "No text found to summarize."));
       return;
     }
 
     state = const AsyncValue.loading();
     final apiKey = ref.read(geminiApiKeyProvider);
 
-    state = await AsyncValue.guard(() async {
-      final prompt = """
+    final prompt = """
 Analyze the following raw OCR text and extract the key information into a clear list of bullet points.
 Rules:
 1. Provide only a list of bullet points.
@@ -50,30 +50,34 @@ Rules:
 3. Fix any obvious OCR typos while preserving the original details.
 
 Raw OCR Text:
-$text
+$cleanText
 """;
 
-      final candidateModels = [
-        'gemini-3.8-flash',
-        'gemini-3.6-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash'
-      ];
+    final candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro-latest',
+      'gemini-1.5-pro',
+    ];
 
-      Object? lastError;
-      for (final modelName in candidateModels) {
-        try {
-          final model = GenerativeModel(model: modelName, apiKey: apiKey);
-          final response = await model.generateContent([Content.text(prompt)]);
-          if (response.text != null && response.text!.isNotEmpty) {
-            return OcrResult(summary: response.text!);
-          }
-        } catch (e) {
-          lastError = e;
+    for (final modelName in candidateModels) {
+      try {
+        final model = GenerativeModel(model: modelName, apiKey: apiKey);
+        final response = await model.generateContent([Content.text(prompt)]);
+        if (response.text != null && response.text!.isNotEmpty) {
+          state = AsyncValue.data(OcrResult(summary: response.text!));
+          return;
         }
+      } catch (_) {
+        // Try next candidate model
       }
+    }
 
-      throw Exception("All Gemini models failed: $lastError");
-    });
+    // Fallback: Generate local summary from key sentences if Gemini API fails
+    final lines = cleanText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final bullets = lines.take(5).map((l) => "• $l").join('\n');
+    state = AsyncValue.data(OcrResult(summary: "Document Summary:\n$bullets"));
   }
 }

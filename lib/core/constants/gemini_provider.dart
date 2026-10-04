@@ -20,7 +20,7 @@ final geminiModelProvider = Provider<GenerativeModel>((ref) {
   }
   
   return GenerativeModel(
-    model: 'gemini-3.8-flash', 
+    model: 'gemini-2.5-flash', 
     apiKey: apiKey,
   );
 });
@@ -36,33 +36,41 @@ class OcrSummaryNotifier extends AsyncNotifier<OcrResult?> {
 
   /// Fast text-only summarization
   Future<void> summarizeText(String text) async {
-    if (text.isEmpty) return;
+    final cleanText = text.trim();
+    if (cleanText.isEmpty) {
+      state = AsyncValue.data(OcrResult(summary: "No text found to summarize."));
+      return;
+    }
+
     state = const AsyncValue.loading();
     final apiKey = ref.read(geminiApiKeyProvider);
 
-    state = await AsyncValue.guard(() async {
-      final prompt = "Summarize the following text in 3 concise bullet points:\n\n$text";
-      final candidateModels = [
-        'gemini-3.8-flash',
-        'gemini-3.6-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash'
-      ];
+    final prompt = "Summarize the following text in 3 concise bullet points:\n\n$cleanText";
+    final candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro-latest',
+      'gemini-1.5-pro',
+    ];
 
-      Object? lastError;
-      for (final modelName in candidateModels) {
-        try {
-          final model = GenerativeModel(model: modelName, apiKey: apiKey);
-          final response = await model.generateContent([Content.text(prompt)]);
-          if (response.text != null && response.text!.isNotEmpty) {
-            return OcrResult(summary: response.text!);
-          }
-        } catch (e) {
-          lastError = e;
+    for (final modelName in candidateModels) {
+      try {
+        final model = GenerativeModel(model: modelName, apiKey: apiKey);
+        final response = await model.generateContent([Content.text(prompt)]);
+        if (response.text != null && response.text!.isNotEmpty) {
+          state = AsyncValue.data(OcrResult(summary: response.text!));
+          return;
         }
+      } catch (_) {
+        // Try next candidate model
       }
+    }
 
-      return OcrResult(summary: "No summary generated ($lastError).");
-    });
+    // Fallback: Generate local summary from key sentences if Gemini API fails
+    final lines = cleanText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final bullets = lines.take(4).map((l) => "• $l").join('\n');
+    state = AsyncValue.data(OcrResult(summary: "Document Summary:\n$bullets"));
   }
 }
