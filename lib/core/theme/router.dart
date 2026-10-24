@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
 // Import your screens (adjust paths if needed)
+import '../../screens/splash_screen.dart';
 import '../../features/scanner/result_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/scanner/scanner_screen.dart';
@@ -15,22 +16,25 @@ import 'dart:async';
 import '../../services/user_session.dart';
 
 final router = GoRouter(
-  initialLocation: '/dashboard',
+  initialLocation: '/splash',
   
   redirect: (context, state) async {
     final isLoggedIn = await UserSession.isLoggedIn();
-    final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+    final isAuthRoute = state.matchedLocation == '/login' || 
+                        state.matchedLocation == '/signup' ||
+                        state.matchedLocation == '/splash';
 
     if (!isLoggedIn && !isAuthRoute) {
       return '/login';
-    }
-    if (isLoggedIn && isAuthRoute) {
-      return '/dashboard';
     }
     return null;
   },
 
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),

@@ -82,6 +82,7 @@ class _LoginPageState extends State<LoginPage> {
       if (checkResult['exists'] == true) {
         final username = checkResult['user']?['username'] ?? googleName;
         await UserSession.saveUser(email: googleEmail, username: username);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Welcome back, $username!")),
         );
@@ -123,8 +124,16 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
-              const Icon(Icons.arrow_back_ios, size: 20),
+              GestureDetector(
+                onTap: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/splash');
+                  }
+                },
+                child: const Icon(Icons.arrow_back_ios, size: 20),
+              ),
               const SizedBox(height: 30),
               const Text("Welcome back", 
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
