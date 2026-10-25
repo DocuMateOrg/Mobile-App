@@ -24,6 +24,7 @@ dependencies:
   # Core Functionality (The "Digitization" parts)
   image_picker: ^1.0.7        # Select from gallery
   google_mlkit_text_recognition: ^0.15.1 # The Free OCR engine
+  google_mlkit_document_scanner: ^0.4.1 # Native Google ML Kit Document Scanner
   google_generative_ai: ^0.4.7 # The Gemini API SDK
   
   # Storage
