@@ -5,8 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:documate/services/user_session.dart';
 
 class ApiService {
-  //static const String baseHost = "https://mobile-app-60bc3.containers.snapdeploy.app";
-  static const String baseHost = "http://192.168.8.108:3000";
+  static const String baseHost = "https://mobile-app-60bc3.containers.snapdeploy.app";
+  //static const String baseHost = "http://192.168.8.108:3000";
   static const String baseUrl = "$baseHost/api";
 
   Future<String?> _getUserId() async {
@@ -45,7 +45,7 @@ class ApiService {
       // Add headers
       request.headers['Authorization'] = 'Bearer $userId';
 
-      final streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
       final response = await http.Response.fromStream(streamedResponse);
 
       return response.statusCode == 201 || response.statusCode == 200;
@@ -75,7 +75,7 @@ class ApiService {
       }
 
       print("Fetching from: $url");
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
       print("Status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
@@ -101,7 +101,7 @@ class ApiService {
           'userId': userId,
           'name': name,
         }),
-      );
+      ).timeout(const Duration(seconds: 8));
 
       return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
@@ -118,7 +118,7 @@ class ApiService {
 
       final response = await http.get(
         Uri.parse('$baseUrl/folders/$userId'),
-      );
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body); 

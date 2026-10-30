@@ -49,11 +49,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (!mounted) return;
 
       if (result.images != null && result.images!.isNotEmpty) {
-        // Take the scanned, perspective-corrected image
-        final String imagePath = result.images!.first;
+        // Pass all scanned, perspective-corrected pages to ResultScreen
+        final List<String> images = result.images!;
 
         // Navigate to ResultScreen for instant ML Kit OCR and Gemini AI summarization
-        final saved = await context.push('/result', extra: imagePath);
+        final saved = await context.push('/result', extra: images);
 
         if (!mounted) return;
         // If document was saved successfully in ResultScreen, notify the Dashboard

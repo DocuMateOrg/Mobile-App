@@ -3,7 +3,7 @@ const jwksClient = require('jwks-rsa');
 
 // Connect to your specific Asgardeo JWKS endpoint
 const client = jwksClient({
-  jwksUri: 'https://api.asgardeo.io/t/himanshaorg/oauth2/jwks'
+  jwksUri: 'https://api.asgardeo.io/t/orgtogk7/oauth2/jwks'
 });
 
 function getKey(header, callback) {

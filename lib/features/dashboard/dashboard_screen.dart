@@ -10,6 +10,7 @@ import 'package:documate/features/scanner/document_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:documate/features/scanner/result_screen.dart';
 import 'package:documate/services/user_session.dart';
+import 'package:documate/services/local_document_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -84,22 +85,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<List<dynamic>> _fetchCombinedDocuments() async {
+    final List<dynamic> combined = [];
+
+    // 1. Fetch local documents (instant offline access)
+    try {
+      final localDocs = await LocalDocumentService().getLocalDocuments(searchQuery: _searchQuery);
+      combined.addAll(localDocs);
+    } catch (e) {
+      debugPrint("Error fetching local documents: $e");
+    }
+
+    // 2. Fetch remote documents
+    try {
+      final remoteDocs = await _apiService.fetchUserDocuments(searchQuery: _searchQuery);
+      for (final rd in remoteDocs) {
+        if (!combined.any((d) => d['id'] == rd['id'] || (d['title'] == rd['title'] && d['created_at'] == rd['created_at']))) {
+          combined.add(rd);
+        }
+      }
+    } catch (e) {
+      debugPrint("Remote documents fetch notice: $e");
+    }
+
+    return combined;
+  }
+
   Future<void> _loadDocuments() async {
     _loadUserData();
-    final userId = await UserSession.getUserId();
-    print("DEBUG: Loading documents for user: $userId");
-    
-    final future = _apiService.fetchUserDocuments(searchQuery: _searchQuery);
+    final future = _fetchCombinedDocuments();
     setState(() {
       _documentsFuture = future;
     });
-
-    try {
-      final docs = await future;
-      print("DEBUG: Found ${docs.length} documents");
-    } catch (e) {
-      print("DEBUG: Error loading documents: $e");
-    }
   }
 
   void _handleLogout(BuildContext context) async {
@@ -814,8 +831,13 @@ class DocumentCard extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              final success = await ApiService().deleteDocument(documentId);
-              if (success) onRefresh();
+              if (documentId < 0) {
+                await LocalDocumentService().deleteLocalDocument(documentId);
+              } else {
+                await ApiService().deleteDocument(documentId);
+                await LocalDocumentService().deleteLocalDocument(documentId);
+              }
+              onRefresh();
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text("Delete", style: TextStyle(color: Colors.white)),

@@ -13,8 +13,8 @@ class AsgardeoAuthService {
   // ===========================================================================
   // CONFIGURATION CONSTANTS (Replace with your actual Asgardeo details)
   // ===========================================================================
-  static const String organization = "himanshaorg";
-  static const String clientId = "L43pAamybFKtklKq7Fb0S20uzgca";
+  static const String organization = "orgtogk7";
+  static const String clientId = "UigCj2fBPtfILhp7vqVmUj9RPJsa";
   static const String redirectUrl = "com.documate.app://callback";
 
   // Base URLs for Asgardeo tenant endpoints

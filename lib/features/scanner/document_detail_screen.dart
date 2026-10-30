@@ -8,6 +8,7 @@ import 'package:image_cropper/image_cropper.dart';
 
 import '../../core/providers/gemini_provider.dart';
 import 'api_service.dart';
+import 'widgets/ask_document_sheet.dart';
 
 class DocumentDetailScreen extends ConsumerStatefulWidget {
   final int documentId;
@@ -245,6 +246,17 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF0056D2)),
+            tooltip: "Ask DocuMate AI",
+            onPressed: () {
+              AskDocumentSheet.show(
+                context,
+                documentText: widget.content,
+                documentTitle: widget.title,
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.crop),
             onPressed: _editImage,
           ),
@@ -301,12 +313,12 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
           
           // 2. Action Buttons
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -5),
                 ),
@@ -316,6 +328,25 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
+                  // 1. Ask AI Button
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0056D2),
+                      side: const BorderSide(color: Color(0xFF0056D2)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.auto_awesome, size: 18),
+                    label: const Text("Ask AI"),
+                    onPressed: () {
+                      AskDocumentSheet.show(
+                        context,
+                        documentText: widget.content,
+                        documentTitle: widget.title,
+                      );
+                    },
+                  ),
+                  // 2. View Summary
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -323,22 +354,23 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                       elevation: 0,
                       side: const BorderSide(color: Color(0xFF0056D2)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
-                    icon: const Icon(Icons.article_outlined),
-                    label: const Text("View Summary"),
+                    icon: const Icon(Icons.article_outlined, size: 18),
+                    label: const Text("Summary"),
                     onPressed: _showSummaryModal,
                   ),
+                  // 3. Audio
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isPlaying ? Colors.red[50] : const Color(0xFF0056D2),
                       foregroundColor: isPlaying ? Colors.red : Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
-                    icon: Icon(isPlaying ? Icons.stop_circle_outlined : Icons.volume_up_outlined),
-                    label: Text(isPlaying ? "Stop Audio" : "Audio Summary"),
+                    icon: Icon(isPlaying ? Icons.stop_circle_outlined : Icons.volume_up_outlined, size: 18),
+                    label: Text(isPlaying ? "Stop" : "Listen"),
                     onPressed: _toggleAudioSummary,
                   ),
                 ],

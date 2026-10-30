@@ -58,9 +58,13 @@ final router = GoRouter(
     GoRoute(
       path: '/result',
       builder: (context, state) {
-        // Retrieve the imagePath passed from the camera
-        final imagePath = state.extra as String; 
-        return ResultScreen(imagePath: imagePath);
+        if (state.extra is List<String>) {
+          return ResultScreen(imagePaths: state.extra as List<String>);
+        } else if (state.extra is List) {
+          return ResultScreen(imagePaths: (state.extra as List).map((e) => e.toString()).toList());
+        }
+        final imagePath = state.extra as String? ?? '';
+        return ResultScreen(imagePaths: imagePath.isNotEmpty ? [imagePath] : []);
       },
     ),
     GoRoute(

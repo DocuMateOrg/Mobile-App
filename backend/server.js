@@ -3,8 +3,8 @@ const express = require('express');
 const axios = require('axios');
 const PDFDocument = require('pdfkit');
 
-const ORG = process.env.ORG || "himanshaorg";
-const BACKEND_CLIENT_ID = process.env.BACKEND_CLIENT_ID || "L43pAamybFKtklKq7Fb0S20uzgca";
+const ORG = process.env.ORG || "orgtogk7";
+const BACKEND_CLIENT_ID = process.env.BACKEND_CLIENT_ID || "VXgJv7bkEQdyxjSltxl6ld1yofwa";
 const BACKEND_CLIENT_SECRET = process.env.BACKEND_CLIENT_SECRET || "";
 const { Document, Packer, Paragraph, TextRun } = require('docx');
 const multer = require('multer');
@@ -482,39 +482,42 @@ const getOrSaveUserOnLogin = async (email, suggestedUsername) => {
 
 // Helper to acquire Asgardeo Management Admin Token
 async function getAsgardeoAdminToken() {
-  const authHeader = Buffer.from(`${BACKEND_CLIENT_ID}:${BACKEND_CLIENT_SECRET}`).toString('base64');
-  
-  // Attempt 1: Client Secret Basic (Standard Header) with full Management and Recovery scopes
+  const currentOrg = process.env.ORG || ORG;
+  const clientId = process.env.BACKEND_CLIENT_ID || BACKEND_CLIENT_ID;
+  const clientSecret = process.env.BACKEND_CLIENT_SECRET || BACKEND_CLIENT_SECRET;
+
+  // Attempt 1: Client Secret Post (Body Parameters - Asgardeo Default)
   try {
     const res = await axios.post(
-      `https://api.asgardeo.io/t/${ORG}/oauth2/token`,
+      `https://api.asgardeo.io/t/${currentOrg}/oauth2/token`,
       new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: BACKEND_CLIENT_ID,
-        client_secret: BACKEND_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         scope: 'internal_user_mgt_create internal_user_mgt_update internal_user_mgt_view internal_user_recovery_create'
       }).toString(),
       {
         headers: {
-          'Authorization': `Basic ${authHeader}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       }
     );
     return res.data.access_token;
   } catch (err1) {
-    // Attempt 2: Client Secret Post (Body Parameters)
+    // Attempt 2: Client Secret Basic (Standard Header)
     try {
+      const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
       const res = await axios.post(
-        `https://api.asgardeo.io/t/${ORG}/oauth2/token`,
+        `https://api.asgardeo.io/t/${currentOrg}/oauth2/token`,
         new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: BACKEND_CLIENT_ID,
-          client_secret: BACKEND_CLIENT_SECRET,
+          client_id: clientId,
+          client_secret: clientSecret,
           scope: 'internal_user_mgt_create internal_user_mgt_update internal_user_mgt_view internal_user_recovery_create'
         }).toString(),
         {
           headers: {
+            'Authorization': `Basic ${authHeader}`,
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         }
