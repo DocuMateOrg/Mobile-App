@@ -12,6 +12,7 @@ import 'ocr_service.dart';
 import 'api_service.dart';
 import '../../services/local_document_service.dart';
 import 'widgets/ask_document_sheet.dart';
+import 'package:documate/core/widgets/bouncing_button.dart';
 
 class ResultScreen extends ConsumerStatefulWidget {
   final List<String> imagePaths;
@@ -95,24 +96,27 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
 
       if (!mounted) return;
 
+      final primaryImagePath = widget.imagePaths.isNotEmpty ? widget.imagePaths.first : null;
+
       setState(() {
-        _extractedText = combined.isEmpty ? "No text detected in scanned image(s)." : combined;
+        _extractedText = combined.isEmpty 
+            ? "[No text detected - Visual AI description generated from image]" 
+            : combined;
         _isOcrRunning = false;
       });
 
-      if (combined.trim().isNotEmpty) {
-        // Trigger Gemini structured summary and smart metadata
-        await ref.read(ocrSummaryProvider.notifier).summarizeText(combined);
+      // Analyze with multimodal Gemini (OCR text if present, or Gemini Vision if no text!)
+      await ref.read(ocrSummaryProvider.notifier).analyzeDocument(
+        text: combined,
+        imagePath: primaryImagePath,
+      );
 
-        // Pre-fill suggested title if available
-        final summaryResult = ref.read(ocrSummaryProvider).value;
-        if (summaryResult?.suggestedTitle != null && summaryResult!.suggestedTitle!.isNotEmpty) {
-          if (_titleController.text.isEmpty || _titleController.text == "Untitled Document") {
-            _titleController.text = summaryResult.suggestedTitle!;
-          }
+      // Pre-fill suggested title if available
+      final summaryResult = ref.read(ocrSummaryProvider).value;
+      if (summaryResult?.suggestedTitle != null && summaryResult!.suggestedTitle!.isNotEmpty) {
+        if (_titleController.text.isEmpty || _titleController.text == "Untitled Document") {
+          _titleController.text = summaryResult.suggestedTitle!;
         }
-      } else {
-        ref.read(ocrSummaryProvider.notifier).summarizeText("");
       }
     } catch (e) {
       if (mounted) {
@@ -376,32 +380,19 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
       appBar: AppBar(
         title: Text(
           "Scan Results",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w700, 
+            fontSize: 18,
+            color: const Color(0xFF0F172A),
+          ),
         ),
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        actions: [
-          // Ask AI Button in AppBar
-          TextButton.icon(
-            onPressed: () {
-              AskDocumentSheet.show(
-                context,
-                documentText: _extractedText,
-                documentTitle: _titleController.text.isNotEmpty ? _titleController.text : "Scanned Document",
-              );
-            },
-            icon: const Icon(Icons.auto_awesome, color: Color(0xFF0056D2), size: 18),
-            label: Text(
-              "Ask AI",
-              style: GoogleFonts.poppins(
-                color: const Color(0xFF0056D2),
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
       ),
       body: Column(
         children: [
@@ -442,7 +433,11 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                         ),
                         child: Text(
                           "Page ${_currentPageIndex + 1} of ${widget.imagePaths.length}",
-                          style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white, 
+                            fontSize: 12, 
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -457,95 +452,162 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // AI Smart Banner
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0056D2), Color(0xFF0284C7)],
+                  // AI Smart Banner - Interactive & Clean
+                  BouncingPressable(
+                    onTap: () {
+                      AskDocumentSheet.show(
+                        context,
+                        documentText: _extractedText,
+                        documentTitle: _titleController.text.isNotEmpty 
+                            ? _titleController.text 
+                            : "Scanned Document",
+                        imagePath: widget.imagePaths.isNotEmpty ? widget.imagePaths.first : null,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF0056D2), Color(0xFF1D4ED8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0056D2).withValues(alpha: 0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0056D2).withValues(alpha: 0.25),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.psychology_rounded, color: Colors.white, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Gemini AI Analysis Ready",
-                                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                              Text(
-                                "Ask questions, listen aloud, or auto-categorize.",
-                                style: GoogleFonts.poppins(color: Colors.white.withValues(alpha: 0.9), fontSize: 11),
-                              ),
-                            ],
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 22),
                           ),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF0056D2),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  summaryState.value?.isVisualDescription == true
+                                      ? "Gemini Vision AI Analysis"
+                                      : "DocuMate Intelligence",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white, 
+                                    fontWeight: FontWeight.w700, 
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  summaryState.value?.isVisualDescription == true
+                                      ? "Visual contents described • Tap to ask questions"
+                                      : "Document analyzed • Tap to ask questions",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white.withValues(alpha: 0.88), 
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          onPressed: () {
-                            AskDocumentSheet.show(
-                              context,
-                              documentText: _extractedText,
-                              documentTitle: _titleController.text.isNotEmpty ? _titleController.text : "Scanned Document",
-                            );
-                          },
-                          child: Text("Ask AI", style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 14),
+                        ],
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  // Section 1: Summary with Text-To-Speech Listen button
+                  // Section 1: Executive Summary / Visual AI Description
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.auto_awesome, color: Color(0xFF0056D2), size: 18),
-                          const SizedBox(width: 6),
+                          Icon(
+                            summaryState.value?.isVisualDescription == true
+                                ? Icons.visibility_outlined
+                                : Icons.description_outlined,
+                            color: const Color(0xFF0056D2),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            "AI SUMMARY & HIGHLIGHTS",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0056D2),
-                              fontSize: 12,
-                              letterSpacing: 0.5,
+                            summaryState.value?.isVisualDescription == true
+                                ? "Visual AI Description"
+                                : "Executive Summary",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                              fontSize: 13,
+                              letterSpacing: 0.2,
                             ),
                           ),
+                          if (summaryState.value?.isVisualDescription == true) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFBFDBFE)),
+                              ),
+                              child: Text(
+                                "VISION",
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF0056D2),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       if (summaryText.isNotEmpty)
-                        IconButton.filledTonal(
-                          tooltip: _isPlayingAudio ? "Stop Audio" : "Listen Aloud",
-                          icon: Icon(
-                            _isPlayingAudio ? Icons.stop_rounded : Icons.volume_up_rounded,
-                            size: 18,
-                            color: const Color(0xFF0056D2),
+                        BouncingPressable(
+                          onTap: () => _toggleAudio(summaryText),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFDBEAFE)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _isPlayingAudio ? Icons.stop_rounded : Icons.volume_up_rounded,
+                                  size: 16,
+                                  color: const Color(0xFF0056D2),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _isPlayingAudio ? "Stop" : "Listen",
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF0056D2),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          onPressed: () => _toggleAudio(summaryText),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   // Summary Card
                   Container(
@@ -553,15 +615,27 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: summaryState.when(
                       data: (result) {
-                        final text = result?.summary ?? "No summary available.";
+                        final rawText = result?.summary ?? "No summary available.";
+                        final text = cleanSummaryText(rawText);
                         return SelectableText(
                           text,
-                          style: GoogleFonts.poppins(fontSize: 14, height: 1.5, color: const Color(0xFF1E293B)),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13.5, 
+                            height: 1.6, 
+                            color: const Color(0xFF1E293B),
+                          ),
                         );
                       },
                       loading: () => const Padding(
@@ -571,7 +645,7 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                             children: [
                               CircularProgressIndicator(strokeWidth: 2.5),
                               SizedBox(height: 12),
-                              Text("Gemini is analyzing document..."),
+                              Text("Analyzing document insights..."),
                             ],
                           ),
                         ),
@@ -583,20 +657,26 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
 
-                  // Section 2: Extracted OCR Text
+                  // Section 2: Extracted Text
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "RAW EXTRACTED TEXT (${widget.imagePaths.length} ${widget.imagePaths.length == 1 ? 'PAGE' : 'PAGES'})",
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueGrey[700],
-                          fontSize: 12,
-                          letterSpacing: 0.5,
-                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.text_fields_rounded, color: Color(0xFF64748B), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Extracted Text (${widget.imagePaths.length} ${widget.imagePaths.length == 1 ? 'Page' : 'Pages'})",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                              fontSize: 13,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
                       ),
                       if (_isOcrRunning)
                         const SizedBox(
@@ -606,23 +686,27 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: SelectableText(
                       _extractedText,
-                      style: GoogleFonts.poppins(fontSize: 13, height: 1.5, color: Colors.blueGrey[900]),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13, 
+                        height: 1.5, 
+                        color: const Color(0xFF334155),
+                      ),
                     ),
                   ),
 
-                  const SizedBox(height: 80), // Padding for bottom bar
+                  const SizedBox(height: 90), // Padding for bottom bar
                 ],
               ),
             ),
@@ -635,8 +719,8 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
               offset: const Offset(0, -4),
             ),
           ],
@@ -644,39 +728,83 @@ class _ResultScreenState extends ConsumerState<ResultScreen> {
         child: SafeArea(
           child: Row(
             children: [
-              // Ask AI Quick Button
-              OutlinedButton.icon(
-                onPressed: () {
+              // Chat with document
+              BouncingPressable(
+                onTap: () {
                   AskDocumentSheet.show(
                     context,
                     documentText: _extractedText,
-                    documentTitle: _titleController.text.isNotEmpty ? _titleController.text : "Scanned Document",
+                    documentTitle: _titleController.text.isNotEmpty 
+                        ? _titleController.text 
+                        : "Scanned Document",
+                    imagePath: widget.imagePaths.isNotEmpty ? widget.imagePaths.first : null,
                   );
                 },
-                icon: const Icon(Icons.auto_awesome, color: Color(0xFF0056D2), size: 18),
-                label: Text("Ask AI", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: const Color(0xFF0056D2))),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  side: const BorderSide(color: Color(0xFF0056D2)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: Container(
+                  height: 50,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF0056D2), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Chat",
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF0056D2),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               // Save Button
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _showSaveDialog,
-                  icon: _isSaving 
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.save_rounded, color: Colors.white, size: 20),
-                  label: Text(
-                    _isSaving ? "SAVING..." : "SAVE DOCUMENT",
-                    style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0056D2),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: BouncingPressable(
+                  onTap: _isSaving ? null : _showSaveDialog,
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0056D2),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0056D2).withValues(alpha: 0.28),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_isSaving)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        else
+                          const Icon(Icons.bookmark_added_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isSaving ? "Saving..." : "Save Document",
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

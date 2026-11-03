@@ -187,14 +187,43 @@ class ApiService {
     return '$baseUrl/documents/$id/export?format=$format';
   }
 
-  Future<String?> downloadExportedFile(int id, String format) async {
+  Future<String?> downloadExportedFile(
+    int id, 
+    String format, {
+    String? title,
+    String? content,
+    String? localImagePath,
+  }) async {
     try {
-      final url = getExportUrl(id, format);
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
+      // 1. If document is on the remote server (positive ID), try standard export endpoint
+      if (id > 0) {
+        final url = getExportUrl(id, format);
+        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+        if (response.statusCode == 200) {
+          final dir = await getTemporaryDirectory();
+          final file = File('${dir.path}/export_$id.$format');
+          await file.writeAsBytes(response.bodyBytes);
+          return file.path;
+        }
+      }
+
+      // 2. Direct export endpoint (for local documents with negative IDs, or if remote ID was not found)
+      final directUri = Uri.parse('$baseUrl/documents/export-direct');
+      final request = http.MultipartRequest('POST', directUri);
+      request.fields['title'] = (title != null && title.isNotEmpty) ? title : 'Document';
+      request.fields['content'] = content ?? '';
+      request.fields['format'] = format;
+
+      if (localImagePath != null && File(localImagePath).existsSync()) {
+        request.files.add(await http.MultipartFile.fromPath('image', localImagePath));
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
+      if (streamedResponse.statusCode == 200) {
+        final bytes = await streamedResponse.stream.toBytes();
         final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/export_$id.$format');
-        await file.writeAsBytes(response.bodyBytes);
+        final file = File('${dir.path}/export_${id}_${DateTime.now().millisecondsSinceEpoch}.$format');
+        await file.writeAsBytes(bytes);
         return file.path;
       }
       return null;

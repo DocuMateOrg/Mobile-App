@@ -11,6 +11,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:documate/features/scanner/result_screen.dart';
 import 'package:documate/services/user_session.dart';
 import 'package:documate/services/local_document_service.dart';
+import 'package:documate/services/local_export_service.dart';
+import 'package:documate/core/widgets/bouncing_button.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -75,10 +80,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      if (_searchQuery != query) {
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final clean = query.trim().replaceAll(RegExp(r'[.,!?]+$'), '');
+      if (_searchQuery != clean) {
         setState(() {
-          _searchQuery = query;
+          _searchQuery = clean;
         });
         _loadDocuments();
       }
@@ -106,6 +112,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       debugPrint("Remote documents fetch notice: $e");
+    }
+
+    // 3. Fallback token-based filter to guarantee voice searches match local and remote docs
+    if (_searchQuery.isNotEmpty) {
+      final tokens = LocalDocumentService.extractSearchTokens(_searchQuery);
+      final rawLower = _searchQuery.toLowerCase();
+      return combined.where((d) {
+        final title = (d['title'] ?? '').toString().toLowerCase();
+        final content = (d['content'] ?? '').toString().toLowerCase();
+        final summary = (d['summary'] ?? '').toString().toLowerCase();
+        final category = (d['category'] ?? d['folder_name'] ?? '').toString().toLowerCase();
+
+        if (title.contains(rawLower) || content.contains(rawLower) || summary.contains(rawLower) || category.contains(rawLower)) {
+          return true;
+        }
+
+        if (tokens.isNotEmpty) {
+          return tokens.any((t) =>
+              title.contains(t) || content.contains(t) || summary.contains(t) || category.contains(t));
+        }
+
+        return false;
+      }).toList();
     }
 
     return combined;
@@ -379,18 +408,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   hintText: 'Search',
                   hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 16),
                   prefixIcon: const Icon(Icons.search, color: Colors.black54, size: 24),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.speaker_phone_outlined, color: Colors.black54),
-                    onPressed: () async {
-                      final String? voiceQuery = await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
-                      );
-                      if (voiceQuery != null && voiceQuery.trim().isNotEmpty) {
-                        _searchController.text = voiceQuery.trim();
-                        _onSearchChanged(voiceQuery.trim());
-                      }
-                    },
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_searchQuery.isNotEmpty || _searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
+                          tooltip: "Clear Search",
+                          onPressed: () {
+                            _searchController.clear();
+                            _onSearchChanged('');
+                          },
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: BouncingPressable(
+                          onTap: () async {
+                            final String? voiceQuery = await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const VoiceSearchScreen()),
+                            );
+                            if (voiceQuery != null && voiceQuery.trim().isNotEmpty) {
+                              final cleanQuery = voiceQuery.trim().replaceAll(RegExp(r'[.,!?]+$'), '');
+                              _searchController.text = cleanQuery;
+                              _onSearchChanged(cleanQuery);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0056D2).withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.mic_rounded,
+                              color: Color(0xFF0056D2),
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 15),
@@ -492,44 +550,510 @@ class QuickActionRow extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
+      builder: (bottomSheetContext) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
               "Convert Document Format",
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              "Pick an image to extract text and convert to PDF or Word:",
+              "Export saved docs or convert photos into PDF or Word (.docx):",
               style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13),
             ),
             const SizedBox(height: 20),
             ListTile(
-              leading: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
-              title: Text("Convert to PDF", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-              subtitle: Text("Extract text & save as PDF document", style: GoogleFonts.poppins(fontSize: 12)),
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0056D2).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF0056D2), size: 26),
+              ),
+              title: Text("Convert Saved Document", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+              subtitle: Text("Select any saved document to export as PDF or Word", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               onTap: () {
-                Navigator.pop(context);
-                _handleUpload(context);
+                Navigator.pop(bottomSheetContext);
+                _showPickDocumentToConvert(context);
               },
             ),
-            const Divider(),
+            const Divider(height: 24),
             ListTile(
-              leading: const Icon(Icons.description, color: Colors.blue, size: 28),
-              title: Text("Convert to Word (.docx)", style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-              subtitle: Text("Extract text & save as editable Word document", style: GoogleFonts.poppins(fontSize: 12)),
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.image_search_outlined, color: Colors.green, size: 26),
+              ),
+              title: Text("Convert Photo from Gallery", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+              subtitle: Text("Extract text from an image & immediately convert", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               onTap: () {
-                Navigator.pop(context);
-                _handleUpload(context);
+                Navigator.pop(bottomSheetContext);
+                _convertPhotoFromGallery(context);
               },
             ),
+            const SizedBox(height: 10),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showPickDocumentToConvert(BuildContext context) async {
+    final docs = await LocalDocumentService().getLocalDocuments();
+    if (!context.mounted) return;
+
+    if (docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No saved documents found to convert. Scan or upload one first!")),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                "Choose Document to Convert",
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text("Tap a document to choose PDF or Word export", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final d = docs[i];
+                    final title = d['title'] ?? 'Document';
+                    final category = d['category'] ?? 'General';
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFEBF3FF),
+                        child: Icon(Icons.description, color: Color(0xFF0056D2)),
+                      ),
+                      title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text(category, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _promptFormatAndExport(context, d);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _promptFormatAndExport(BuildContext context, Map<String, dynamic> doc) {
+    final title = doc['title'] ?? 'Document';
+    final content = doc['content'] ?? '';
+    final localImagePath = doc['local_image_path'];
+
+    showDialog(
+      context: context,
+      builder: (dlgContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Export \"$title\"", style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold)),
+        content: const Text("Select your desired export format:"),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            label: const Text("PDF Document"),
+            onPressed: () async {
+              Navigator.pop(dlgContext);
+              final path = await LocalExportService.exportToPdf(
+                title: title,
+                content: content,
+                imagePath: localImagePath,
+              );
+              if (path != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Converted to PDF successfully!")),
+                  );
+                }
+                await OpenFilex.open(path);
+              }
+            },
+          ),
+          TextButton.icon(
+            icon: const Icon(Icons.description, color: Colors.blue),
+            label: const Text("Word (.docx)"),
+            onPressed: () async {
+              Navigator.pop(dlgContext);
+              final path = await LocalExportService.exportToWordDoc(
+                title: title,
+                content: content,
+                imagePath: localImagePath,
+              );
+              if (path != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Converted to Word successfully!")),
+                  );
+                }
+                await OpenFilex.open(path);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _convertPhotoFromGallery(BuildContext context) async {
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+      if (image == null || !context.mounted) return;
+
+      // Extract text
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final recognizedText = await textRecognizer.processImage(InputImage.fromFilePath(image.path));
+      await textRecognizer.close();
+
+      final ocrText = recognizedText.text.trim();
+      final docTitle = "Converted_${DateTime.now().millisecondsSinceEpoch % 10000}";
+
+      if (!context.mounted) return;
+      _promptFormatAndExport(context, {
+        'title': docTitle,
+        'content': ocrText.isNotEmpty ? ocrText : "Image converted document.",
+        'local_image_path': image.path,
+      });
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Convert error: $e")),
+        );
+      }
+    }
+  }
+
+  void _showEditDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (bottomSheetContext) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Edit Documents & Photos",
+              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Crop image borders, enhance scans, or edit document text:",
+              style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.crop_rotate_outlined, color: Colors.orange, size: 26),
+              ),
+              title: Text("Crop & Enhance Photo", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+              subtitle: Text("Crop, straighten, and adjust image borders", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              onTap: () {
+                Navigator.pop(bottomSheetContext);
+                _cropAndEnhanceImage(context);
+              },
+            ),
+            const Divider(height: 24),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0056D2).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.edit_note_outlined, color: Color(0xFF0056D2), size: 26),
+              ),
+              title: Text("Edit Document Text & Title", style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+              subtitle: Text("Modify titles, extracted OCR content, or notes", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              onTap: () {
+                Navigator.pop(bottomSheetContext);
+                _showPickDocumentToEdit(context);
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _cropAndEnhanceImage(BuildContext context) async {
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+      if (image == null || !context.mounted) return;
+
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop & Enhance',
+            toolbarColor: const Color(0xFF0056D2),
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(title: 'Crop & Enhance'),
+        ],
+      );
+
+      if (croppedFile != null && context.mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ResultScreen(imagePath: croppedFile.path)),
+        );
+        if (onRefresh != null) onRefresh!();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Crop error: $e")),
+        );
+      }
+    }
+  }
+
+  void _showPickDocumentToEdit(BuildContext context) async {
+    final docs = await LocalDocumentService().getLocalDocuments();
+    if (!context.mounted) return;
+
+    if (docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No saved documents found to edit.")),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                "Select Document to Edit",
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text("Tap any document to update its title and text", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final d = docs[i];
+                    final title = d['title'] ?? 'Document';
+                    final category = d['category'] ?? 'General';
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFFFF3DC),
+                        child: Icon(Icons.edit, color: Colors.orange),
+                      ),
+                      title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text(category, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
+                      trailing: const Icon(Icons.edit_outlined, color: Color(0xFF0056D2), size: 20),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openEditDocumentSheet(context, d);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openEditDocumentSheet(BuildContext context, Map<String, dynamic> doc) {
+    final titleController = TextEditingController(text: doc['title'] ?? '');
+    final contentController = TextEditingController(text: doc['content'] ?? '');
+    final docId = doc['id'] is int ? doc['id'] : int.tryParse(doc['id'].toString()) ?? 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (editCtx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(editCtx).viewInsets.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Edit Document",
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: "Document Title",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: contentController,
+                maxLines: 6,
+                decoration: InputDecoration(
+                  labelText: "Document Text / Content",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0056D2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: () async {
+                    final newTitle = titleController.text.trim();
+                    final newContent = contentController.text.trim();
+                    await LocalDocumentService().updateLocalDocument(
+                      id: docId,
+                      title: newTitle.isNotEmpty ? newTitle : "Document",
+                      content: newContent,
+                    );
+                    if (editCtx.mounted) Navigator.pop(editCtx);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Document updated successfully!")),
+                      );
+                    }
+                    if (onRefresh != null) onRefresh!();
+                  },
+                  child: Text("Save Changes", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -557,12 +1081,7 @@ class QuickActionRow extends StatelessWidget {
           "edit",
           const Color(0xFFFFDB99),
           const Color(0xFFD69A2D),
-          () async {
-            await context.push('/folders');
-            if (onRefresh != null) {
-              onRefresh!();
-            }
-          },
+          () => _showEditDialog(context),
         ),
         _buildActionButton(
           Icons.transform_outlined,
@@ -594,8 +1113,8 @@ class QuickActionRow extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, Color bgColor, Color iconColor, VoidCallback onTap) {
-    return InkWell(
+    Widget _buildActionButton(IconData icon, String label, Color bgColor, Color iconColor, VoidCallback onTap) {
+    return BouncingPressable(
       onTap: onTap,
       child: Column(
         children: [
@@ -605,11 +1124,25 @@ class QuickActionRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: bgColor,
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: bgColor.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Icon(icon, color: iconColor, size: 28),
           ),
           const SizedBox(height: 8),
-          Text(label, style: GoogleFonts.poppins(fontSize: 12, color: Colors.black87)),
+          Text(
+            label, 
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12, 
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1E293B),
+            ),
+          ),
         ],
       ),
     );

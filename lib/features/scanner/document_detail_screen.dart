@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/providers/gemini_provider.dart';
+import '../../services/local_export_service.dart';
 import 'api_service.dart';
 import 'widgets/ask_document_sheet.dart';
 
@@ -110,27 +113,78 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
     setState(() => _isExporting = true);
 
     try {
-      final filePath = await ApiService().downloadExportedFile(widget.documentId, format);
+      String? filePath;
+
+      // 1. If document is on the remote server (positive ID), attempt server export first
+      if (widget.documentId > 0) {
+        try {
+          filePath = await ApiService().downloadExportedFile(
+            widget.documentId,
+            format,
+            title: widget.title,
+            content: widget.content,
+            localImagePath: widget.imagePath,
+          );
+        } catch (e) {
+          debugPrint("Server export attempt notice: $e");
+        }
+      }
+
+      // 2. Local zero-dependency export fallback (handles local offline documents with negative IDs,
+      // or remote documents when connection/server is offline or fails)
+      if (filePath == null) {
+        String? localImg = widget.imagePath;
+        if (localImg.isEmpty || !File(localImg).existsSync()) {
+          localImg = null;
+          if (widget.serverImagePath != null && widget.serverImagePath!.isNotEmpty) {
+            try {
+              final imgUrl = "${ApiService.baseHost}/${widget.serverImagePath!.replaceAll('\\', '/')}";
+              final res = await http.get(Uri.parse(imgUrl)).timeout(const Duration(seconds: 5));
+              if (res.statusCode == 200) {
+                final tempDir = await getTemporaryDirectory();
+                final tempImgFile = File('${tempDir.path}/temp_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                await tempImgFile.writeAsBytes(res.bodyBytes);
+                localImg = tempImgFile.path;
+              }
+            } catch (_) {}
+          }
+        }
+
+        if (format == 'pdf') {
+          filePath = await LocalExportService.exportToPdf(
+            title: widget.title,
+            content: widget.content,
+            imagePath: localImg,
+          );
+        } else if (format == 'docx' || format == 'doc') {
+          filePath = await LocalExportService.exportToWordDoc(
+            title: widget.title,
+            content: widget.content,
+            imagePath: localImg,
+          );
+        }
+      }
+
       print("DEBUG: Exported file path: $filePath");
       
       if (filePath != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Exported to $format successfully!")),
+            SnackBar(content: Text("Exported to ${format.toUpperCase()} successfully!")),
           );
         }
         await OpenFilex.open(filePath);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Failed to export document.")),
+            const SnackBar(content: Text("Failed to export document. Check your connection.")),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
+          SnackBar(content: Text("Export error: $e")),
         );
       }
     } finally {
@@ -140,7 +194,13 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
 
   void _showSummaryModal() {
     if (ref.read(ocrSummaryProvider).value == null) {
-      ref.read(ocrSummaryProvider.notifier).summarizeText(widget.content);
+      final imgPath = widget.imagePath.isNotEmpty && File(widget.imagePath).existsSync()
+          ? widget.imagePath
+          : null;
+      ref.read(ocrSummaryProvider.notifier).analyzeDocument(
+        text: widget.content,
+        imagePath: imgPath,
+      );
     }
     
     showModalBottomSheet(
@@ -152,6 +212,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
         return Consumer(
           builder: (context, ref, child) {
             final summaryState = ref.watch(ocrSummaryProvider);
+            final isVisual = summaryState.value?.isVisualDescription ?? false;
             
             return Container(
               padding: const EdgeInsets.all(24),
@@ -161,26 +222,55 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "AI Summary",
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0056D2),
-                      ),
+                    Row(
+                      children: [
+                        Icon(
+                          isVisual ? Icons.visibility_outlined : Icons.auto_awesome,
+                          color: const Color(0xFF0056D2),
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isVisual ? "Visual AI Description" : "AI Summary",
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF0056D2),
+                          ),
+                        ),
+                        if (isVisual) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: Text(
+                              "VISION",
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF0056D2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 20),
                     summaryState.when(
                       data: (res) => SelectableText(
-                        res?.summary ?? "No summary available.",
+                        cleanSummaryText(res?.summary ?? "No summary available."),
                         style: GoogleFonts.poppins(fontSize: 15, height: 1.5),
                       ),
-                      loading: () => const Center(
+                      loading: () => Center(
                         child: Column(
                           children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 15),
-                            Text("Generating summary..."),
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 15),
+                            Text(isVisual ? "Analyzing visual elements..." : "Generating summary..."),
                           ],
                         ),
                       ),
@@ -213,7 +303,13 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Generating summary for audio...")),
       );
-      await ref.read(ocrSummaryProvider.notifier).summarizeText(widget.content);
+      final imgPath = widget.imagePath.isNotEmpty && File(widget.imagePath).existsSync()
+          ? widget.imagePath
+          : null;
+      await ref.read(ocrSummaryProvider.notifier).analyzeDocument(
+        text: widget.content,
+        imagePath: imgPath,
+      );
       
       final newState = ref.read(ocrSummaryProvider);
       if (newState.value != null && newState.value!.summary.isNotEmpty) {
@@ -227,9 +323,11 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
       await flutterTts.setPitch(1.0);
       await flutterTts.speak(textToSpeak);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not generate summary to read.")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Could not generate summary to read.")),
+        );
+      }
     }
   }
 
@@ -253,6 +351,9 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                 context,
                 documentText: widget.content,
                 documentTitle: widget.title,
+                imagePath: widget.imagePath.isNotEmpty && File(widget.imagePath).existsSync()
+                    ? widget.imagePath
+                    : null,
               );
             },
           ),
@@ -343,6 +444,9 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                         context,
                         documentText: widget.content,
                         documentTitle: widget.title,
+                        imagePath: widget.imagePath.isNotEmpty && File(widget.imagePath).existsSync()
+                            ? widget.imagePath
+                            : null,
                       );
                     },
                   ),

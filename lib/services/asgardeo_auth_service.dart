@@ -337,7 +337,15 @@ class AsgardeoAuthService {
         Uri.parse("${ApiService.baseUrl}/auth/forgot-password/init"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"email": username}),
-      );
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.body.trim().startsWith("<!DOCTYPE") || response.statusCode == 503) {
+        return {
+          "success": false,
+          "isServerWaking": true,
+          "message": "Authentication server is currently waking up. Please retry in 30 seconds.",
+        };
+      }
 
       final data = jsonDecode(response.body);
       debugPrint("Password Recovery Init Status: ${response.statusCode}, Body: ${response.body}");
@@ -349,14 +357,19 @@ class AsgardeoAuthService {
           "flowId": data["flowConfirmationCode"],
         };
       } else {
+        final rawMsg = data["message"]?.toString() ?? "";
+        final isSetting = rawMsg.contains("not enabled") || rawMsg.contains("notifications is not enabled");
         return {
           "success": false,
-          "message": data["message"] ?? "Failed to initiate recovery.",
+          "isAsgardeoSetting": isSetting,
+          "message": isSetting
+              ? "Password recovery is disabled in your Asgardeo console. Enable it in Asgardeo under Sign-in & Security > Account Recovery > Password Recovery."
+              : (data["message"] ?? "Failed to initiate recovery."),
         };
       }
     } catch (e) {
       debugPrint("Exception during Password Recovery Init: $e");
-      return {"success": false, "message": "Network error: $e"};
+      return {"success": false, "message": "Connection error: $e"};
     }
   }
 

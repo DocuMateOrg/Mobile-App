@@ -47,6 +47,36 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ),
         ),
       );
+    } else if (result["isAsgardeoSetting"] == true) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF0056D2)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text("Enable in Asgardeo Console", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          content: const Text(
+            "Asgardeo cloud requires Password Recovery to be enabled for your organization:\n\n"
+            "1. Go to console.asgardeo.io\n"
+            "2. Open 'Sign-in & Security' > 'Account Recovery'\n"
+            "3. Turn ON 'Password Recovery' with Email and click Update.\n\n"
+            "After enabling, users will receive recovery email OTPs directly.",
+            style: TextStyle(fontSize: 14, height: 1.45),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Got it"),
+            ),
+          ],
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result["message"] ?? "Failed to send recovery code")),

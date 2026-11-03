@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,14 +16,21 @@ class ChatMessage {
 class AskDocumentSheet extends ConsumerStatefulWidget {
   final String documentText;
   final String documentTitle;
+  final String? imagePath;
 
   const AskDocumentSheet({
     super.key,
     required this.documentText,
     required this.documentTitle,
+    this.imagePath,
   });
 
-  static void show(BuildContext context, {required String documentText, required String documentTitle}) {
+  static void show(
+    BuildContext context, {
+    required String documentText,
+    required String documentTitle,
+    String? imagePath,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -30,6 +38,7 @@ class AskDocumentSheet extends ConsumerStatefulWidget {
       builder: (context) => AskDocumentSheet(
         documentText: documentText,
         documentTitle: documentTitle,
+        imagePath: imagePath,
       ),
     );
   }
@@ -44,12 +53,24 @@ class _AskDocumentSheetState extends ConsumerState<AskDocumentSheet> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
-  final List<String> _suggestedQuestions = [
-    "What are the key deadlines or dates?",
-    "Summarize the main action items",
-    "Are there any payments or costs mentioned?",
-    "Translate summary to Spanish",
-  ];
+  List<String> get _suggestedQuestions {
+    final clean = widget.documentText.trim();
+    final isVisualOnly = clean.isEmpty || clean.startsWith("[No text detected");
+    if (isVisualOnly) {
+      return [
+        "Describe what is in this image",
+        "Explain any diagrams or flowcharts shown",
+        "What key objects or structures do you see?",
+        "Are there any handwritten notes or markings?",
+      ];
+    }
+    return [
+      "What are the key deadlines or dates?",
+      "Summarize the main action items",
+      "Are there any payments or costs mentioned?",
+      "Translate summary to Spanish",
+    ];
+  }
 
   @override
   void initState() {
@@ -98,7 +119,18 @@ class _AskDocumentSheetState extends ConsumerState<AskDocumentSheet> {
 
     final gemini = ref.read(geminiServiceProvider);
     try {
-      final answer = await gemini.askDocument(widget.documentText, text);
+      Uint8List? imageBytes;
+      if (widget.imagePath != null && File(widget.imagePath!).existsSync()) {
+        try {
+          imageBytes = await File(widget.imagePath!).readAsBytes();
+        } catch (_) {}
+      }
+
+      final answer = await gemini.askDocument(
+        documentText: widget.documentText,
+        imageBytes: imageBytes,
+        question: text,
+      );
       if (!mounted) return;
       setState(() {
         _messages.add(ChatMessage(text: answer, isUser: false));

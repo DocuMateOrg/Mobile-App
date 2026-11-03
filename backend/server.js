@@ -1052,6 +1052,89 @@ app.get('/api/documents/:id/export', async (req, res) => {
     }
 });
 
+// Direct export for local/offline documents or custom payloads
+app.post('/api/documents/export-direct', upload.single('image'), async (req, res) => {
+    try {
+        const { title = 'Document', content = '', format = 'pdf' } = req.body;
+        const cleanTitle = (title || 'Document').replace(/[^\w\s\-]/g, '').replace(/\s+/g, '_');
+        const fileName = `${cleanTitle}_export`;
+
+        if (format === 'pdf') {
+            const doc = new PDFDocument({ margin: 40 });
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.pdf`);
+            doc.pipe(res);
+
+            // Title
+            doc.fontSize(20).text(title, { align: 'center' });
+            doc.moveDown();
+
+            // Image if provided
+            if (req.file && fs.existsSync(req.file.path)) {
+                try {
+                    doc.image(req.file.path, {
+                        fit: [500, 450],
+                        align: 'center',
+                        valign: 'center'
+                    });
+                    doc.moveDown();
+                } catch (imgErr) {
+                    log(`Direct export image notice: ${imgErr.message}`);
+                }
+            }
+
+            // Text / Summary content
+            if (content && content.trim()) {
+                doc.fontSize(12).text(content.trim(), { align: 'left', lineGap: 3 });
+            }
+
+            doc.end();
+        } else if (format === 'docx' || format === 'doc') {
+            const paragraphs = [
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: title,
+                            bold: true,
+                            size: 32,
+                        }),
+                    ],
+                }),
+            ];
+
+            if (content && content.trim()) {
+                paragraphs.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: "\n" + content.trim(),
+                                size: 24,
+                            }),
+                        ],
+                    })
+                );
+            }
+
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: paragraphs,
+                }],
+            });
+
+            const buffer = await Packer.toBuffer(doc);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}.docx`);
+            res.send(buffer);
+        } else {
+            res.status(400).json({ error: "Invalid format. Use 'pdf' or 'docx'." });
+        }
+    } catch (err) {
+        log(`Direct Export Error: ${err.message}`);
+        res.status(500).json({ error: "Server error during direct export" });
+    }
+});
+
 // --- START SERVER ---
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 DocuMate Backend running at http://localhost:${PORT}`);

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:documate/core/widgets/bouncing_button.dart';
+import 'package:documate/services/asgardeo_auth_service.dart';
+import 'package:documate/features/scanner/api_service.dart';
+import 'package:documate/services/user_session.dart';
 import 'package:go_router/go_router.dart';
-import '../services/asgardeo_auth_service.dart';
-import '../services/user_session.dart';
-import 'otp_verification_page.dart';
-import '../features/scanner/api_service.dart';
 
 class SignupPage extends StatefulWidget {
   final String? initialEmail;
@@ -20,9 +21,9 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _usernameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final AsgardeoAuthService _asgardeoAuthService = AsgardeoAuthService();
   final ApiService _apiService = ApiService();
 
@@ -65,6 +66,7 @@ class _SignupPageState extends State<SignupPage> {
       if (checkResult['exists'] == true) {
         final username = checkResult['user']?['username'] ?? googleName;
         await UserSession.saveUser(email: googleEmail, username: username);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Account already exists for $googleEmail! Logged in.")),
         );
@@ -152,100 +154,239 @@ class _SignupPageState extends State<SignupPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
-              IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => Navigator.pop(context)),
-              const SizedBox(height: 30),
-              const Text("Create an account", 
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
-              const Text("Welcome! Please enter your details.", 
-                style: TextStyle(fontSize: 16, color: Colors.black54)),
-              const SizedBox(height: 40),
+              BouncingPressable(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.black87),
+                ),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                "Create an account", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 30, 
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "Welcome! Please enter your details.", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15, 
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 36),
 
-              const Text("Username", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                "Username", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _usernameController,
                 maxLength: 16,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15),
                 decoration: InputDecoration(
                   hintText: "Enter your username (max 16 chars)",
-                  prefixIcon: const Icon(Icons.person_outline),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 14),
+                  prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
                   counterText: "",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0056D2), width: 1.5),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              const Text("Email", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                "Email", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _emailController,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: "Enter your email",
+                  hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 14),
+                  prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0056D2), width: 1.5),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              const Text("Password", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                "Password", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _passwordController,
                 obscureText: !_isPasswordVisible,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  hintText: "Create a password",
+                  hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 14),
+                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
                   suffixIcon: IconButton(
-                    icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off_outlined),
+                    icon: Icon(
+                      _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_outlined,
+                      color: const Color(0xFF64748B),
+                    ),
                     onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                   ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _register,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0056D2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Sign up", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0056D2), width: 1.5),
+                  ),
                 ),
               ),
-              const SizedBox(height: 30),
-              const Center(child: Text("Or sign up with", style: TextStyle(color: Colors.grey))),
+              const SizedBox(height: 36),
+
+              // Tactile Primary Sign Up Button
+              BouncingPressable(
+                onTap: _isLoading ? null : _register,
+                child: Container(
+                  width: double.infinity,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0056D2),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0056D2).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : Text(
+                            "Sign up", 
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white, 
+                              fontSize: 16, 
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              Center(
+                child: Text(
+                  "Or sign up with", 
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF94A3B8), 
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _socialIcon(Icons.g_mobiledata, color: Colors.red, onTap: _isLoading ? null : () => _loginWithSocial('Google')),
+                  _socialIcon(
+                    child: Image.asset('assets/icons/google_logo.png', height: 26, width: 26),
+                    onTap: _isLoading ? null : () => _loginWithSocial('Google'),
+                  ),
                   const SizedBox(width: 20),
-                  _socialIcon(Icons.code, color: Colors.black, onTap: _isLoading ? null : () => _loginWithSocial('GitHub')),
+                  _socialIcon(
+                    icon: Icons.code_rounded, 
+                    color: const Color(0xFF1E293B), 
+                    onTap: _isLoading ? null : () => _loginWithSocial('GitHub'),
+                  ),
                 ],
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 32),
               Center(
-                child: GestureDetector(
+                child: BouncingPressable(
                   onTap: () => Navigator.pop(context),
                   child: RichText(
-                    text: const TextSpan(
-                      text: "Already have an account ? ",
-                      style: TextStyle(color: Colors.black54),
+                    text: TextSpan(
+                      text: "Already have an account? ",
+                      style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 14),
                       children: [
-                        TextSpan(text: "Sign in", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                        TextSpan(
+                          text: "Sign in", 
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.bold, 
+                            color: const Color(0xFF0056D2),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -253,16 +394,24 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  Widget _socialIcon(IconData icon, {Color color = Colors.black, VoidCallback? onTap}) {
-    return GestureDetector(
+  Widget _socialIcon({Widget? child, IconData? icon, Color color = Colors.black, VoidCallback? onTap}) {
+    return BouncingPressable(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Icon(icon, color: color, size: 28),
+        child: child ?? Icon(icon!, color: color, size: 26),
       ),
     );
   }

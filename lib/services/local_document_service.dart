@@ -70,12 +70,31 @@ class LocalDocumentService {
       }
 
       if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-        final query = searchQuery.trim().toLowerCase();
+        final raw = searchQuery.trim().toLowerCase();
+        final cleanQuery = raw.replaceAll(RegExp(r'[^\w\s]'), ' ').trim();
+        final tokens = extractSearchTokens(raw);
+
         docs = docs.where((d) {
           final title = (d['title'] ?? '').toString().toLowerCase();
           final content = (d['content'] ?? '').toString().toLowerCase();
           final summary = (d['summary'] ?? '').toString().toLowerCase();
-          return title.contains(query) || content.contains(query) || summary.contains(query);
+          final category = (d['category'] ?? '').toString().toLowerCase();
+
+          // 1. Direct match with exact or cleaned phrase
+          if (title.contains(raw) || content.contains(raw) || summary.contains(raw) || category.contains(raw)) {
+            return true;
+          }
+          if (cleanQuery.isNotEmpty && (title.contains(cleanQuery) || content.contains(cleanQuery) || summary.contains(cleanQuery) || category.contains(cleanQuery))) {
+            return true;
+          }
+
+          // 2. Token match (matches if any keyword like 'receipt', 'invoice', 'electricity' is found)
+          if (tokens.isNotEmpty) {
+            return tokens.any((t) =>
+                title.contains(t) || content.contains(t) || summary.contains(t) || category.contains(t));
+          }
+
+          return false;
         }).toList();
       }
 
@@ -126,4 +145,56 @@ class LocalDocumentService {
       return false;
     }
   }
+
+  Future<bool> updateLocalDocument({
+    required int id,
+    String? title,
+    String? content,
+    String? summary,
+    String? localImagePath,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final docs = await getLocalDocuments();
+      final index = docs.indexWhere((d) => d['id'] == id);
+      if (index != -1) {
+        if (title != null) docs[index]['title'] = title;
+        if (content != null) docs[index]['content'] = content;
+        if (summary != null) docs[index]['summary'] = summary;
+        if (localImagePath != null) docs[index]['local_image_path'] = localImagePath;
+        await prefs.setString(_documentsKey, jsonEncode(docs));
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Error updating local document: $e");
+      return false;
+    }
+  }
+
+  /// Extracts meaningful keyword tokens from raw speech or text queries by removing filler stop words
+  static List<String> extractSearchTokens(String rawQuery) {
+    final clean = rawQuery
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s]'), ' ')
+        .trim();
+    if (clean.isEmpty) return [];
+
+    const stopWords = {
+      'find', 'search', 'show', 'get', 'me', 'my', 'the', 'a', 'an', 
+      'for', 'where', 'is', 'are', 'all', 'of', 'in', 'to', 'please',
+      'document', 'documents', 'doc', 'docs', 'file', 'files', 'about'
+    };
+
+    final tokens = clean
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty && !stopWords.contains(w))
+        .toList();
+
+    if (tokens.isEmpty) {
+      return clean.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    }
+    return tokens;
+  }
 }
+

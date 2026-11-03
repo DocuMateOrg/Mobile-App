@@ -19,14 +19,37 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme();
+
     return MaterialApp.router( 
       routerConfig: router,    
       title: 'Documate',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0056D2)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0056D2),
+          primary: const Color(0xFF0056D2),
+        ),
         useMaterial3: true,
-        textTheme: GoogleFonts.poppinsTextTheme(),
+        textTheme: textTheme,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            splashFactory: InkSparkle.splashFactory,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            splashFactory: InkSparkle.splashFactory,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            splashFactory: InkSparkle.splashFactory,
+          ),
+        ),
       ),
     );
   }

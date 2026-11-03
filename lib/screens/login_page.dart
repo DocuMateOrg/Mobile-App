@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:documate/core/widgets/bouncing_button.dart';
+import 'package:documate/screens/forgot_password_page.dart';
+import 'package:documate/screens/signup_page.dart';
+import 'package:documate/services/asgardeo_auth_service.dart';
+import 'package:documate/features/scanner/api_service.dart';
+import 'package:documate/services/user_session.dart';
 import 'package:go_router/go_router.dart';
-import '../services/asgardeo_auth_service.dart';
-import '../services/user_session.dart';
-import 'signup_page.dart';
-import 'forgot_password_page.dart';
-import '../features/scanner/api_service.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final AsgardeoAuthService _asgardeoAuthService = AsgardeoAuthService();
   final ApiService _apiService = ApiService();
 
@@ -120,11 +123,11 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
+              BouncingPressable(
                 onTap: () {
                   if (context.canPop()) {
                     context.pop();
@@ -132,143 +135,302 @@ class _LoginPageState extends State<LoginPage> {
                     context.go('/splash');
                   }
                 },
-                child: const Icon(Icons.arrow_back_ios, size: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.black87),
+                ),
               ),
-              const SizedBox(height: 30),
-              const Text("Welcome back", 
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
-              const Text("Log in to your account", 
-                style: TextStyle(fontSize: 16, color: Colors.black54)),
-              const SizedBox(height: 40),
+              const SizedBox(height: 28),
+              Text(
+                "Welcome back", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 30, 
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "Log in to your account", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15, 
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 36),
               
-              const Text("Email or Username", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                "Email or Username", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _emailController,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15),
                 decoration: InputDecoration(
                   hintText: "Enter your email or username",
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 14),
+                  prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0056D2), width: 1.5),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
               
-              const Text("Password", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                "Password", 
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _passwordController,
                 obscureText: !_isPasswordVisible,
+                style: GoogleFonts.plusJakartaSans(fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  hintText: "Enter your password",
+                  hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 14),
+                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
                   suffixIcon: IconButton(
-                    icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off_outlined),
+                    icon: Icon(
+                      _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_outlined,
+                      color: const Color(0xFF64748B),
+                    ),
                     onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                   ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0056D2), width: 1.5),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      Checkbox(value: _rememberMe, onChanged: (v) => setState(() => _rememberMe = v!)),
-                      const Text("Remember me"),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _rememberMe, 
+                          activeColor: const Color(0xFF0056D2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Remember me",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B)),
+                      ),
                     ],
                   ),
-                  GestureDetector(
+                  BouncingPressable(
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const ForgotPasswordPage()),
                     ),
-                    child: const Text("Forgot password", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "Forgot password?", 
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600, 
+                        fontSize: 13,
+                        color: const Color(0xFF0056D2),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 28),
               
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _signIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0056D2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              // Tactile Primary Sign In Button
+              BouncingPressable(
+                onTap: _isLoading ? null : _signIn,
+                child: Container(
+                  width: double.infinity,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0056D2),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0056D2).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Sign in", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: Center(
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : Text(
+                            "Sign in", 
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white, 
+                              fontSize: 16, 
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 22),
               
               Center(
-                child: GestureDetector(
+                child: BouncingPressable(
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupPage())),
                   child: RichText(
-                    text: const TextSpan(
-                      text: "Don't have an account ? ",
-                      style: TextStyle(color: Colors.black54),
+                    text: TextSpan(
+                      text: "Don't have an account? ",
+                      style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 14),
                       children: [
-                        TextSpan(text: "Register", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                        TextSpan(
+                          text: "Register", 
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.bold, 
+                            color: const Color(0xFF0056D2),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              const Row(
+              const SizedBox(height: 26),
+              Row(
                 children: [
-                  Expanded(child: Divider()),
-                  Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text("OR")),
-                  Expanded(child: Divider()),
+                  const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14), 
+                    child: Text(
+                      "OR", 
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12, 
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF94A3B8),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
                 ],
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 24),
               
-              // Social Logins (Google & GitHub)
-              GestureDetector(
+              // Social Logins (Google & GitHub) with Click Feel
+              BouncingPressable(
                 onTap: _isLoading ? null : () => _loginWithSocial('Google'),
                 child: Container(
                   width: double.infinity,
-                  height: 55,
+                  height: 52,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
-                      SizedBox(width: 10),
-                      Text("Sign In With Google", style: TextStyle(fontWeight: FontWeight.bold)),
+                      Image.asset('assets/icons/google_logo.png', height: 24, width: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Sign In With Google", 
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 15),
-              GestureDetector(
+              const SizedBox(height: 14),
+              BouncingPressable(
                 onTap: _isLoading ? null : () => _loginWithSocial('GitHub'),
                 child: Container(
                   width: double.infinity,
-                  height: 55,
+                  height: 52,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.code, color: Colors.black, size: 24),
-                      SizedBox(width: 10),
-                      Text("Sign In With GitHub", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Icon(Icons.code_rounded, color: Color(0xFF1E293B), size: 22),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Sign In With GitHub", 
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
